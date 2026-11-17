@@ -17,12 +17,13 @@ export async function getPublicSchedule() {
     const dates = upcomingDates(today, 366);
     const end = dates[dates.length - 1];
     const db = await getDb();
-    const [hours, relations, blocks, bookings, openDates] = await Promise.all([
+    const [hours, relations, activeServices, blocks, bookings, openDates] = await Promise.all([
       db.select({ professionalId: businessHours.professionalId, weekday: businessHours.weekday, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
         .from(businessHours).innerJoin(professionals, eq(professionals.id, businessHours.professionalId))
         .where(and(eq(businessHours.active, true), eq(professionals.active, true))),
       db.select({ professionalId: professionalServices.professionalId, serviceId: services.id, duration: services.durationMinutes })
         .from(professionalServices).innerJoin(services, eq(services.id, professionalServices.serviceId)).where(eq(services.active, true)),
+      db.select({ id: services.id, duration: services.durationMinutes }).from(services).where(eq(services.active, true)),
       db.select({ professionalId: blockedTimes.professionalId, date: blockedTimes.blockDate, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime })
         .from(blockedTimes).where(and(gte(blockedTimes.blockDate, today), lte(blockedTimes.blockDate, end))),
       db.select({ professionalId: appointments.professionalId, date: appointments.appointmentDate, startTime: appointments.startTime, endTime: appointments.endTime })
@@ -38,9 +39,11 @@ export async function getPublicSchedule() {
         .map(period => period.professionalId))];
       return professionalsForDate.some(professionalId => {
         const openDate = openDatesByKey.get(`${professionalId}:${date}`);
-        const durations = relations
-          .filter(row => row.professionalId === professionalId && row.duration > 0 && (!openDate?.serviceIds || openDate.serviceIds.includes(row.serviceId)))
-          .map(row => row.duration);
+        const durations = (openDate?.serviceIds === null || openDate?.serviceIds === undefined
+          ? relations.filter(row => row.professionalId === professionalId)
+          : activeServices.filter(service => openDate.serviceIds?.includes(service.id)))
+          .map(row => row.duration)
+          .filter(duration => duration > 0);
         if (!durations.length) return false;
         const periods = hours.filter(period => period.professionalId === professionalId && period.weekday === weekdayForDate(date));
         return buildConfiguredStartSlots(periods, Math.min(...durations), unavailable.filter(row => row.date === date && row.professionalId === professionalId))

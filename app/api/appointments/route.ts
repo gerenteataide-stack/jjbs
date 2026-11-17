@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, lt, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { appointmentServices, appointments, blockedTimes, businessHours, openScheduleDates, clients, notifications, professionalServices, professionals, services, users } from "../../../db/schema";
+import { appointmentServices, appointments, blockedTimes, businessHours, openScheduleDates, clients, notifications, professionals, services, users } from "../../../db/schema";
 import { getCurrentUser } from "../../../lib/auth";
 import { normalizeWhatsapp } from "../../../lib/masks";
 import { normalizeCoupon, validateCoupon } from "../../../lib/promotions";
@@ -113,10 +113,9 @@ export async function POST(request: Request) {
     }
 
     const [professional] = await db.select({ id: professionals.id }).from(professionals)
-      .innerJoin(professionalServices, eq(professionalServices.professionalId, professionals.id))
-      .where(and(eq(professionals.id, payload.professionalId), eq(professionals.active, true), eq(professionalServices.serviceId, service.id)))
+      .where(and(eq(professionals.id, payload.professionalId), eq(professionals.active, true)))
       .limit(1);
-    if (!professional) return json({ message: "A profissional escolhida não atende este serviço." }, 400);
+    if (!professional) return json({ message: "A profissional escolhida não está ativa." }, 400);
 
     const [openDate] = await db.select({ id: openScheduleDates.id, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professional.id), eq(openScheduleDates.date, payload.appointmentDate))).limit(1);
     if (!openDate) return json({ message: "Esta data não está liberada para agendamento." }, 409);

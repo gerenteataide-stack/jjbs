@@ -23,15 +23,17 @@ export async function GET(request: Request) {
   try {
     const db = await getDb();
     if (!serviceId) {
-      const [eligiblePairs, openDates, hours, blockRows, appointmentRows] = await Promise.all([
+      const [eligiblePairs, activeServices, openDates, hours, blockRows, appointmentRows] = await Promise.all([
         db.select({ professionalId: professionals.id, serviceId: services.id, durationMinutes: services.durationMinutes })
           .from(professionalServices)
           .innerJoin(professionals, eq(professionals.id, professionalServices.professionalId))
           .innerJoin(services, eq(services.id, professionalServices.serviceId))
           .where(and(eq(professionals.active, true), eq(services.active, true))),
+        db.select({ id: services.id, durationMinutes: services.durationMinutes })
+          .from(services).where(eq(services.active, true)),
         db.select({ professionalId: openScheduleDates.professionalId, serviceIds: openScheduleDates.serviceIds })
-          .from(openScheduleDates)
-          .where(eq(openScheduleDates.date, appointmentDate)),
+          .from(openScheduleDates).innerJoin(professionals, eq(professionals.id, openScheduleDates.professionalId))
+          .where(and(eq(openScheduleDates.date, appointmentDate), eq(professionals.active, true))),
         db.select({ professionalId: businessHours.professionalId, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
           .from(businessHours)
           .innerJoin(professionals, eq(professionals.id, businessHours.professionalId))
@@ -44,20 +46,22 @@ export async function GET(request: Request) {
           .where(and(eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
       ]);
 
-      const openDatesByProfessional = new Map(openDates.map((row) => [row.professionalId, row.serviceIds]));
       const slots = new Set<string>();
       const serviceIds = new Set<string>();
-      for (const pair of eligiblePairs) {
-        const openServiceIds = openDatesByProfessional.get(pair.professionalId);
-        if (pair.durationMinutes <= 0 || openServiceIds === undefined || (openServiceIds !== null && !openServiceIds.includes(pair.serviceId))) continue;
-        serviceIds.add(pair.serviceId);
+      for (const openDate of openDates) {
+        const dateServices = openDate.serviceIds === null
+          ? eligiblePairs.filter((pair) => pair.professionalId === openDate.professionalId)
+          : activeServices.filter((service) => openDate.serviceIds?.includes(service.id));
+        for (const service of dateServices) serviceIds.add(service.id);
+        const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
+        if (!durations.length) continue;
         const unavailable = [
-          ...blockRows.filter((row) => row.professionalId === pair.professionalId),
-          ...appointmentRows.filter((row) => row.professionalId === pair.professionalId),
+          ...blockRows.filter((row) => row.professionalId === openDate.professionalId),
+          ...appointmentRows.filter((row) => row.professionalId === openDate.professionalId),
         ];
         const serviceSlots = buildConfiguredStartSlots(
-          hours.filter((row) => row.professionalId === pair.professionalId),
-          pair.durationMinutes,
+          hours.filter((row) => row.professionalId === openDate.professionalId),
+          Math.min(...durations),
           unavailable,
         );
         for (const slot of serviceSlots) slots.add(slot);
@@ -77,17 +81,16 @@ export async function GET(request: Request) {
 
     let dateProfessionals = availableProfessionals;
     if (appointmentDate) {
-      const openDates = await db.select({ professionalId: openScheduleDates.professionalId, serviceIds: openScheduleDates.serviceIds })
-        .from(openScheduleDates).where(eq(openScheduleDates.date, appointmentDate));
-      const openDateByProfessional = new Map(openDates.map((row) => [row.professionalId, row.serviceIds]));
-      dateProfessionals = availableProfessionals.filter((professional) => {
-        const serviceIds = openDateByProfessional.get(professional.id);
-        return serviceIds !== undefined && (serviceIds === null || serviceIds.includes(service.id));
-      });
+      const openDates = await db.select({ id: professionals.id, name: professionals.name, title: professionals.title, serviceIds: openScheduleDates.serviceIds })
+        .from(openScheduleDates).innerJoin(professionals, eq(professionals.id, openScheduleDates.professionalId))
+        .where(and(eq(openScheduleDates.date, appointmentDate), eq(professionals.active, true)))
+        .orderBy(asc(professionals.displayOrder), asc(professionals.name));
+      dateProfessionals = openDates.filter((professional) => professional.serviceIds === null || professional.serviceIds.includes(service.id))
+        .map(({ id, name, title }) => ({ id, name, title }));
     }
 
     if (!professionalId || !appointmentDate) return noStore({ professionals: dateProfessionals, slots: [] });
-    if (!availableProfessionals.some((professional) => professional.id === professionalId)) {
+    if (!appointmentDate && !availableProfessionals.some((professional) => professional.id === professionalId)) {
       return noStore({ message: "Esta profissional não atende o serviço selecionado." }, 400);
     }
     if (!dateProfessionals.some((professional) => professional.id === professionalId)) return noStore({ professionals: dateProfessionals, slots: [] });
