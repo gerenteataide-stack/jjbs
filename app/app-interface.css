@@ -112,4 +112,3 @@
 .account-review-stars button[aria-pressed=true]{background:color-mix(in srgb,#d4af37 16%,transparent);border-color:#d4af37}
 .account-review-stars button:focus-visible{outline:3px solid #d4af37;outline-offset:2px}
 .account-review-card form>label span,.account-review-card form small{color:var(--ui-muted,#5e5c53);font-size:13px}
-*** End of File

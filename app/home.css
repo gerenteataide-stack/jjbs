@@ -74,4 +74,3 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .home-review-stars{color:var(--home-accent);letter-spacing:.08em}
 .home-review-carousel small{margin-top:16px;color:#c7c5bd;line-height:1.5}
 @media(max-width:760px){.home-reviews{padding-top:70px;padding-bottom:70px}.home-reviews .home-section-top{display:grid;gap:18px;margin-bottom:30px}.home-review-carousel article{min-height:180px;padding:22px}}
-*** End of File
