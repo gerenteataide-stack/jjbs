@@ -120,6 +120,13 @@
       "when": 1794883709028,
       "tag": "0016_flippant_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794927600000,
+      "tag": "0017_lgpd_privacy",
+      "breakpoints": true
     }
   ]
 }

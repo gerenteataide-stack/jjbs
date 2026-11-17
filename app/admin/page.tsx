@@ -626,6 +626,7 @@ export default function AdminPage() {
           <Link href="/">Site</Link>
           <Link href="/agendar">Agendamentos</Link>
           <Link href="/minha-conta">Minha conta</Link>
+          <Link href="/admin/lgpd">Privacidade</Link>
         </nav>
         <div className="admin-header-actions">
           <span className="booking-header-label">Área administrativa</span>

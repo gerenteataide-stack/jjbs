@@ -660,3 +660,41 @@ export const appointmentServices = pgTable(
     serviceIndex: index("appointment_services_service_idx").on(table.serviceId),
   }),
 );
+
+export const lgpdRequests = pgTable(
+  "lgpd_requests",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
+    type: text("request_type").notNull(),
+    status: text("status").notNull().default("pending"),
+    details: text("details"),
+    resolutionNote: text("resolution_note"),
+    resolvedBy: text("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => ({
+    userDateIndex: index("lgpd_requests_user_date_idx").on(table.userId, table.createdAt),
+    statusDateIndex: index("lgpd_requests_status_date_idx").on(table.status, table.createdAt),
+  }),
+);
+
+export const lgpdConsents = pgTable(
+  "lgpd_consents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    granted: boolean("granted").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    policyText: text("policy_text").notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userPurposeDateIndex: index("lgpd_consents_user_purpose_date_idx").on(table.userId, table.purpose, table.recordedAt),
+  }),
+);

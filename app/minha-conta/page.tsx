@@ -431,6 +431,7 @@ export default function MyAccountPage() {
               Sair da conta
             </button>
           </div>
+          {user.role === "client" && <p><a href="/minha-conta/privacidade">Central de privacidade e dados pessoais ↗</a></p>}
           {message && (
             <p
               className={`account-feedback ${isError ? "error" : ""}`}
