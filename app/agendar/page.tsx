@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- o preview usa links nativos nas páginas públicas. */
 /* eslint-disable react-hooks/set-state-in-effect -- disponibilidade é carregada de forma assíncrona. */
 
-import { useEffect, useMemo, useState } from "react";
-import { formatWhatsapp } from "../../lib/masks";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatWhatsapp, normalizeWhatsapp } from "../../lib/masks";
 import { whatsappHref } from "../../lib/public-links";
 import { PublicBrand, usePublicSettings } from "../public-settings";
 
@@ -82,8 +82,10 @@ const fallbackProfessional: Professional = {
   title: null,
 };
 const steps = [
-  "Data e horário",
-  "Serviço e profissional",
+  "Data",
+  "Horário",
+  "Serviço",
+  "Profissional",
   "Seus dados",
   "Promoção",
   "Revisão",
@@ -120,6 +122,9 @@ export default function BookingPage() {
     [openDates],
   );
   const [services, setServices] = useState(fallbackServices);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState("");
+  const [availableServiceIds, setAvailableServiceIds] = useState<string[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [step, setStep] = useState(1);
@@ -145,6 +150,7 @@ export default function BookingPage() {
     null,
   );
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const timeSelectionRef = useRef<HTMLFieldSetElement>(null);
 
   const selectedService =
     services.find((item) => item.id === serviceId) ?? services[0];
@@ -154,6 +160,9 @@ export default function BookingPage() {
   const selectedDate =
     dateOptions.find((item) => item.value === date)?.label ??
     "Escolha uma data";
+  const dateServices = services.filter((service) =>
+    availableServiceIds.includes(service.id),
+  );
 
   useEffect(() => {
     let active = true;
@@ -179,6 +188,7 @@ export default function BookingPage() {
         setDatesError("");
         if (requestedDate && nextDates.includes(requestedDate)) {
           setDate(requestedDate);
+          setStep(2);
         }
       })
       .catch(() => {
@@ -213,11 +223,11 @@ export default function BookingPage() {
         if (
           response.ok &&
           Array.isArray(result.services) &&
-          result.services.length &&
           active
         ) {
           const nextServices = result.services as Service[];
-          setServices(nextServices);
+          if (nextServices.length) setServices(nextServices);
+          setServicesError("");
           setServiceId((current) =>
             requestedServiceId &&
             nextServices.some((service) => service.id === requestedServiceId)
@@ -226,18 +236,32 @@ export default function BookingPage() {
                 ? current
                 : "",
           );
+        } else if (active) {
+          setServicesError("Não foi possível carregar os serviços agora. Tente novamente.");
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setServicesError("Não foi possível carregar os serviços agora. Tente novamente.");
+      })
+      .finally(() => {
+        if (active) setServicesLoading(false);
+      });
     return () => {
       active = false;
     };
   }, []);
 
   useEffect(() => {
+    if (step !== 2 || !date) return;
+    const timer = window.setTimeout(() => {
+      timeSelectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [date, step]);
+
+  useEffect(() => {
     let active = true;
-    if (!date) {
-      setSlots([]);
+    if (!date || (step !== 2 && step !== 4)) {
       setAvailabilityNote("");
       setAvailabilityLoading(false);
       return () => {
@@ -249,8 +273,8 @@ export default function BookingPage() {
     setAvailabilityNote("");
     setAvailabilityLoading(true);
     const queryParams = new URLSearchParams({ date });
-    const choosingDateAndTime = step === 1 || !serviceId;
-    if (!choosingDateAndTime) {
+    const choosingDateAndTime = step === 2;
+    if (step === 4) {
       queryParams.set("serviceId", serviceId);
       if (professionalId) queryParams.set("professionalId", professionalId);
     }
@@ -277,10 +301,19 @@ export default function BookingPage() {
           : [];
 
         if (choosingDateAndTime) {
+          const nextServiceIds = Array.isArray(result.serviceIds)
+            ? result.serviceIds.filter((value: unknown): value is string => typeof value === "string")
+            : [];
+          setAvailableServiceIds(nextServiceIds);
           setProfessionals([]);
           setSlots(nextSlots);
-          if (!nextSlots.length)
-            setAvailabilityNote("Não há horários de início livres nesta data.");
+          if (serviceId && !nextServiceIds.includes(serviceId)) {
+            setServiceId("");
+            setProfessionalId("");
+            setCouponCode("");
+            setAppliedCoupon(null);
+          }
+          if (!nextSlots.length) setAvailabilityNote("Não há horários de início livres nesta data.");
           return;
         }
 
@@ -289,9 +322,7 @@ export default function BookingPage() {
           setProfessionalId((current) => {
             if (nextProfessionals.some((professional) => professional.id === current))
               return current;
-            return nextProfessionals.length === 1
-              ? nextProfessionals[0].id
-              : "";
+            return "";
           });
         } else {
           setProfessionals([]);
@@ -303,17 +334,20 @@ export default function BookingPage() {
 
         if (!professionalId) {
           setSlots([]);
-          setAvailabilityNote("Escolha a profissional para confirmar este horário.");
+          setAvailabilityNote("");
           return;
         }
 
         setSlots(nextSlots);
         if (time && !nextSlots.includes(time)) {
-          setAvailabilityNote("Este horário de início não está disponível para o serviço e a profissional escolhidos. Volte e selecione outro horário ou profissional.");
+          setAvailabilityNote("Este horário não está disponível com esta profissional para o serviço escolhido. Volte e selecione outro horário ou profissional.");
         } else if (!nextSlots.length) {
           setAvailabilityNote(
             "Não há horários livres nesta data para este serviço e profissional.",
           );
+        } else {
+          setAvailabilityNote("");
+          if (step === 4) setStep(5);
         }
       })
       .catch(() => {
@@ -365,17 +399,11 @@ export default function BookingPage() {
   }
   function goNext() {
     setError("");
-    if (step === 1 && (!date || !time))
-      return setError("Escolha uma data e um horário de início.");
-    if (step === 2 && (!serviceId || !professionalId))
-      return setError("Escolha um serviço e uma profissional para continuar.");
-    if (step === 2 && availabilityLoading)
-      return setError("Aguarde a confirmação da disponibilidade deste horário.");
-    if (step === 2 && !slots.includes(time))
-      return setError("Este horário não está disponível para esta combinação de serviço e profissional. Volte e escolha outro horário ou profissional.");
-    if (step === 3 && (!client.name.trim() || !client.phone.trim()))
-      return setError("Informe seu nome e WhatsApp para continuar.");
-    if (step === 4 && couponCode.trim() && !appliedCoupon)
+    if (step === 5 && !client.name.trim())
+      return setError("Informe seu nome para continuar.");
+    if (step === 5 && !normalizeWhatsapp(client.phone))
+      return setError("Informe um WhatsApp válido para continuar.");
+    if (step === 6 && couponCode.trim() && !appliedCoupon)
       return setError(
         "Clique em aplicar para validar o cupom ou apague o código para continuar sem cupom.",
       );
@@ -383,6 +411,10 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
+    if (step === 5) {
+      setProfessionalId("");
+      setAvailabilityNote("");
+    }
     setStep((current) => Math.max(current - 1, 1));
   }
   async function submitBooking() {
@@ -493,9 +525,7 @@ export default function BookingPage() {
             <br />
             <em>o seu horário.</em>
           </h1>
-          <p>
-            Escolha uma data, o horário de início e depois o serviço para você.
-          </p>
+          <p>Escolha a data, o horário, o serviço e a profissional. Cada escolha leva à próxima etapa.</p>
           <div className="booking-steps" aria-label="Etapas do agendamento">
             {steps.map((label, index) => (
               <div
@@ -536,8 +566,19 @@ export default function BookingPage() {
                           key={option.value}
                           aria-pressed={option.value === date}
                           onClick={() => {
-                            if (option.value !== date) setTime("");
+                            if (option.value !== date) {
+                              setTime("");
+                              setAvailableServiceIds([]);
+                              setProfessionals([]);
+                              if (date) {
+                                setServiceId("");
+                                setProfessionalId("");
+                                setCouponCode("");
+                                setAppliedCoupon(null);
+                              }
+                            }
                             setDate(option.value);
+                            setStep(2);
                             setError("");
                           }}
                         >
@@ -551,59 +592,67 @@ export default function BookingPage() {
                     </p>
                   )}
                 </fieldset>
-                {date && (
-                  <fieldset className="booking-fieldset">
-                    <legend>Horários de início disponíveis</legend>
-                    {availabilityLoading ? (
-                      <p className="booking-helper">Carregando horários para esta data…</p>
-                    ) : slots.length ? (
-                      <div className="booking-time-grid">
-                        {slots.map((slot) => (
-                          <button
-                            className={`booking-time-option ${slot === time ? "selected" : ""}`}
-                            type="button"
-                            key={slot}
-                            aria-pressed={slot === time}
-                            onClick={() => {
-                              setTime(slot);
-                              setError("");
-                              setStep(2);
-                            }}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="booking-helper">
-                        {availabilityNote || "Não há horários de início livres nesta data."}
-                      </p>
-                    )}
-                  </fieldset>
-                )}
               </div>
             )}
             {step === 2 && (
               <div>
+                <h2 id="booking-panel-title">Escolha um horário</h2>
+                <p className="booking-helper">
+                  Horários de início disponíveis em <strong>{selectedDate}</strong>.
+                </p>
+                <fieldset className="booking-fieldset" ref={timeSelectionRef} tabIndex={-1}>
+                  <legend>Horários de início disponíveis</legend>
+                  {availabilityLoading ? (
+                    <p className="booking-helper">Carregando horários para esta data…</p>
+                  ) : slots.length ? (
+                    <div className="booking-time-grid">
+                      {slots.map((slot) => (
+                        <button
+                          className={`booking-time-option ${slot === time ? "selected" : ""}`}
+                          type="button"
+                          key={slot}
+                          aria-pressed={slot === time}
+                          onClick={() => {
+                            setTime(slot);
+                            setError("");
+                            setStep(3);
+                          }}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="booking-helper" role="status">
+                      {availabilityNote || "Não há horários de início livres nesta data."}
+                    </p>
+                  )}
+                </fieldset>
+              </div>
+            )}
+            {step === 3 && (
+              <div>
                 <h2 id="booking-panel-title">Agora escolha seu serviço</h2>
                 <p className="booking-helper">
-                  Início selecionado: <strong>{selectedDate}, às {time}</strong>. Você poderá conversar com a gente antes da confirmação.
+                  Início selecionado: <strong>{selectedDate}, às {time}</strong>. Mostramos apenas serviços liberados para esta data.
                 </p>
-                <div className="booking-service-grid">
-                  {services.map((service) => (
+                {servicesLoading ? <p className="booking-helper">Carregando os serviços liberados para esta data…</p> : servicesError ? <p className="booking-helper" role="status">{servicesError}</p> : dateServices.length ? <div className="booking-service-grid">
+                  {dateServices.map((service) => (
                     <button
                       className={`booking-service-option ${service.id === serviceId ? "selected" : ""}`}
                       type="button"
                       key={service.id}
                       aria-pressed={service.id === serviceId}
                       onClick={() => {
-                        if (service.id === serviceId) return;
-                        setServiceId(service.id);
-                        setProfessionals([]);
-                        setProfessionalId("");
-                        setCouponCode("");
-                        setAppliedCoupon(null);
+                        if (service.id !== serviceId) {
+                          setServiceId(service.id);
+                          setProfessionals([]);
+                          setProfessionalId("");
+                          setCouponCode("");
+                          setAppliedCoupon(null);
+                        }
                         setError("");
+                        setStep(4);
                       }}
                     >
                       <span className="booking-option-check" aria-hidden="true">
@@ -617,43 +666,50 @@ export default function BookingPage() {
                       </span>
                     </button>
                   ))}
-                </div>
-                {serviceId && (
-                  <fieldset className="booking-fieldset">
-                    <legend>Escolha a profissional</legend>
-                    {availabilityLoading ? (
-                      <p className="booking-helper">Verificando quem atende este serviço…</p>
-                    ) : professionals.length ? (
-                      <div className="booking-date-grid">
-                        {professionals.map((professional) => (
-                          <button
-                            className={`booking-date-option ${professional.id === professionalId ? "selected" : ""}`}
-                            type="button"
-                            key={professional.id}
-                            aria-pressed={professional.id === professionalId}
-                            onClick={() => {
-                              setProfessionalId(professional.id);
-                              setError("");
-                            }}
-                          >
-                            <strong>{professional.name}</strong>
-                            <small>{professional.title ?? "Profissional do studio"}</small>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="booking-helper">
-                        {availabilityNote || "Escolha um serviço para ver as profissionais disponíveis."}
-                      </p>
-                    )}
-                  </fieldset>
-                )}
+                </div> : <p className="booking-helper" role="status">Nenhum serviço está disponível nesta data. Volte e escolha outra data.</p>}
+              </div>
+            )}
+            {step === 4 && (
+              <div>
+                <h2 id="booking-panel-title">Escolha a profissional</h2>
+                <p className="booking-helper">
+                  Serviço: <strong>{selectedService.name}</strong> · {selectedDate}, às {time}. Escolha quem atende este serviço nesta data; vamos confirmar o horário em seguida.
+                </p>
+                <fieldset className="booking-fieldset">
+                  <legend>Profissionais disponíveis</legend>
+                  {availabilityLoading ? (
+                    <p className="booking-helper">Confirmando a disponibilidade deste horário…</p>
+                  ) : professionals.length ? (
+                    <div className="booking-date-grid">
+                      {professionals.map((professional) => (
+                        <button
+                          className={`booking-date-option ${professional.id === professionalId ? "selected" : ""}`}
+                          type="button"
+                          key={professional.id}
+                          aria-pressed={professional.id === professionalId}
+                          onClick={() => {
+                            setProfessionalId(professional.id);
+                            setAvailabilityNote("Confirmando a disponibilidade do horário…");
+                            setError("");
+                          }}
+                        >
+                          <strong>{professional.name}</strong>
+                          <small>{professional.title ?? "Profissional do studio"}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="booking-helper" role="status">
+                      {availabilityNote || "Nenhuma profissional atende este serviço nesta data."}
+                    </p>
+                  )}
+                </fieldset>
                 {!availabilityLoading && availabilityNote && (
                   <p className="booking-helper" role="status">{availabilityNote}</p>
                 )}
               </div>
             )}
-            {step === 3 && (
+            {step === 5 && (
               <div>
                 <h2 id="booking-panel-title">Como podemos falar com você?</h2>
                 <p className="booking-helper">
@@ -672,8 +728,9 @@ export default function BookingPage() {
                     />
                   </label>
                   <label>
-                    WhatsApp
+                    WhatsApp <span>(obrigatório)</span>
                     <input
+                      type="tel"
                       value={client.phone}
                       onChange={(event) =>
                         updateClient(
@@ -685,6 +742,8 @@ export default function BookingPage() {
                       autoComplete="tel"
                       inputMode="tel"
                       maxLength={15}
+                      required
+                      aria-required="true"
                     />
                   </label>
                   <label className="booking-full-field">
@@ -713,7 +772,7 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            {step === 4 && (
+            {step === 6 && (
               <div>
                 <h2 id="booking-panel-title">Você tem um cupom?</h2>
                 <p className="booking-helper">
@@ -742,7 +801,7 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            {step === 5 && (
+            {step === 7 && (
               <div>
                 <h2 id="booking-panel-title">Está tudo certo?</h2>
                 <p className="booking-helper">
@@ -806,7 +865,7 @@ export default function BookingPage() {
                   Ver serviços
                 </a>
               )}
-              {step < steps.length ? (
+              {step >= 5 && step < steps.length ? (
                 <button
                   className="button button-gold"
                   type="button"
@@ -814,7 +873,7 @@ export default function BookingPage() {
                 >
                   Continuar <span>↗</span>
                 </button>
-              ) : (
+              ) : step === steps.length ? (
                 <button
                   className="button button-gold"
                   type="button"
@@ -824,7 +883,7 @@ export default function BookingPage() {
                   {isSubmitting ? "Enviando..." : "Solicitar horário"}{" "}
                   <span>↗</span>
                 </button>
-              )}
+              ) : null}
             </div>
           </section>
           <aside className="booking-aside">
