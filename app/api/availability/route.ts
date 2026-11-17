@@ -50,6 +50,7 @@ export async function GET(request: Request) {
       for (const pair of eligiblePairs) {
         const openServiceIds = openDatesByProfessional.get(pair.professionalId);
         if (pair.durationMinutes <= 0 || openServiceIds === undefined || (openServiceIds !== null && !openServiceIds.includes(pair.serviceId))) continue;
+        serviceIds.add(pair.serviceId);
         const unavailable = [
           ...blockRows.filter((row) => row.professionalId === pair.professionalId),
           ...appointmentRows.filter((row) => row.professionalId === pair.professionalId),
@@ -59,7 +60,6 @@ export async function GET(request: Request) {
           pair.durationMinutes,
           unavailable,
         );
-        if (serviceSlots.length) serviceIds.add(pair.serviceId);
         for (const slot of serviceSlots) slots.add(slot);
       }
       return noStore({ professionals: [], slots: [...slots].sort(), serviceIds: [...serviceIds] });
