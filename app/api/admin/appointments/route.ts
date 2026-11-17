@@ -70,6 +70,40 @@ export async function PATCH(request: Request) {
       });
     }
 
+    if (nextStatus === "completed" && existing.status !== "completed" && existing.clientUserId) {
+      const title = "Avalie seu atendimento";
+      const message = `Seu atendimento${existing.serviceName ? ` de ${existing.serviceName}` : ""} foi concluído. Conte como foi sua experiência com uma nota de 1 a 5 estrelas.`;
+      try {
+        await db.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: existing.clientUserId,
+          appointmentId: existing.id,
+          title,
+          message,
+          type: "review_request",
+          channel: "in_app",
+          status: "sent",
+          sentAt: new Date(),
+          createdBy: admin.id,
+        });
+      } catch (error) {
+        console.error("[notifications] review request record failed", {
+          message: error instanceof Error ? error.message : "Unknown notification error",
+        });
+      }
+      try {
+        await sendAppointmentPush([existing.clientUserId], {
+          title,
+          body: message,
+          url: "/minha-conta#avaliacoes",
+        });
+      } catch (error) {
+        console.error("[notifications] review request push failed", {
+          message: error instanceof Error ? error.message : "Unknown push error",
+        });
+      }
+    }
+
     return Response.json({ appointment: updated }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ message: "Não foi possível atualizar o agendamento." }, { status: 500, headers: { "Cache-Control": "no-store" } });

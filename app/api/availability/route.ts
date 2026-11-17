@@ -24,12 +24,12 @@ export async function GET(request: Request) {
     const db = await getDb();
     if (!serviceId) {
       const [eligiblePairs, openDates, hours, blockRows, appointmentRows] = await Promise.all([
-        db.select({ professionalId: professionals.id, durationMinutes: services.durationMinutes })
+        db.select({ professionalId: professionals.id, serviceId: services.id, durationMinutes: services.durationMinutes })
           .from(professionalServices)
           .innerJoin(professionals, eq(professionals.id, professionalServices.professionalId))
           .innerJoin(services, eq(services.id, professionalServices.serviceId))
           .where(and(eq(professionals.active, true), eq(services.active, true))),
-        db.select({ professionalId: openScheduleDates.professionalId })
+        db.select({ professionalId: openScheduleDates.professionalId, serviceIds: openScheduleDates.serviceIds })
           .from(openScheduleDates)
           .where(eq(openScheduleDates.date, appointmentDate)),
         db.select({ professionalId: businessHours.professionalId, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
@@ -47,7 +47,12 @@ export async function GET(request: Request) {
       const openProfessionalIds = new Set(openDates.map((row) => row.professionalId));
       const slots = new Set<string>();
       for (const pair of eligiblePairs) {
-        if (pair.durationMinutes <= 0 || !openProfessionalIds.has(pair.professionalId)) continue;
+        const openDate = openDates.find((row) => row.professionalId === pair.professionalId);
+        if (
+          pair.durationMinutes <= 0 ||
+          !openProfessionalIds.has(pair.professionalId) ||
+          (openDate?.serviceIds && !openDate.serviceIds.includes(pair.serviceId))
+        ) continue;
         const unavailable = [
           ...blockRows.filter((row) => row.professionalId === pair.professionalId),
           ...appointmentRows.filter((row) => row.professionalId === pair.professionalId),
@@ -76,8 +81,10 @@ export async function GET(request: Request) {
       return noStore({ message: "Esta profissional não atende o serviço selecionado." }, 400);
     }
 
-    const [openDate] = await db.select({ id: openScheduleDates.id }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, appointmentDate))).limit(1);
-    if (!openDate) return noStore({ professionals: availableProfessionals, slots: [] });
+    const [openDate] = await db.select({ id: openScheduleDates.id, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, appointmentDate))).limit(1);
+    if (!openDate || (openDate.serviceIds && !openDate.serviceIds.includes(service.id))) {
+      return noStore({ professionals: availableProfessionals, slots: [] });
+    }
     const hours = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
       .from(businessHours)
       .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(appointmentDate)), eq(businessHours.active, true)))

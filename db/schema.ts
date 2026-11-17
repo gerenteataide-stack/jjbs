@@ -289,6 +289,7 @@ export const openScheduleDates = pgTable("open_schedule_dates", {
   id: text("id").primaryKey(),
   professionalId: text("professional_id").notNull().references(() => professionals.id),
   date: text("date").notNull(),
+  serviceIds: jsonb("service_ids").$type<string[] | null>(),
   createdAt: createdAt(),
 }, table => ({ professionalDate: uniqueIndex("open_schedule_dates_professional_date_unique").on(table.professionalId, table.date) }));
 
@@ -573,7 +574,7 @@ export const reviews = pgTable(
     punctuality: integer("punctuality").notNull(),
     environmentRating: integer("environment_rating").notNull(),
     overallRating: integer("overall_rating").notNull(),
-    comment: text("comment").notNull(),
+    comment: text("comment"),
     status: text("status").notNull().default("pending"),
     adminResponse: text("admin_response"),
     featured: boolean("featured").notNull().default(false),

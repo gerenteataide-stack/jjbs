@@ -1,48 +1,67 @@
 "use client";
 import { useEffect, useState } from "react";
-import { usePublicSettings } from "./public-settings";
+
 type Review = {
   id: string;
   clientName: string;
   serviceName: string | null;
   overallRating: number;
-  comment: string;
+  comment: string | null;
   adminResponse: string | null;
 };
+
 export default function ReviewsHighlight() {
-  const settings = usePublicSettings();
   const [items, setItems] = useState<Review[]>([]);
+
   useEffect(() => {
     fetch("/api/reviews")
-      .then((r) => (r.ok ? r.json() : { reviews: [] }))
-      .then((p) => setItems((p.reviews ?? []).slice(0, 3)))
+      .then((response) => (response.ok ? response.json() : { reviews: [] }))
+      .then((data) => setItems((data.reviews ?? []).slice(0, 3)))
       .catch(() => undefined);
   }, []);
-  if (!items.length)
-    return (
-      <>
-        <blockquote>
-          “O cuidado nos detalhes transforma não só o cabelo, mas a forma como
-          você se sente.”
-        </blockquote>
-        <p>Experiência {settings.salonName} <span>✦✦✦✦✦</span></p>
-      </>
-    );
+
+  if (!items.length) return null;
+
   return (
-    <div className="home-review-carousel">
-      {items.map((item) => (
-        <article key={item.id}>
-          <blockquote>“{item.comment}”</blockquote>
-          <p>
-            {item.clientName}
-            {item.serviceName ? ` · ${item.serviceName}` : ""}{" "}
-            <span>{"✦".repeat(item.overallRating)}</span>
-          </p>
-          {item.adminResponse && (
-            <small>Resposta do studio: {item.adminResponse}</small>
-          )}
-        </article>
-      ))}
-    </div>
+    <section
+      className="home-reviews home-section"
+      aria-labelledby="home-reviews-title"
+    >
+      <div className="home-section-top">
+        <div>
+          <span className="home-reviews-eyebrow">Experiências reais</span>
+          <h2 id="home-reviews-title">O cuidado também se conta.</h2>
+        </div>
+        <p>Avaliações de quem já viveu um momento de cuidado no studio.</p>
+      </div>
+      <div className="home-review-carousel">
+        {items.map((item) => (
+          <article key={item.id}>
+            {item.comment ? (
+              <blockquote>“{item.comment}”</blockquote>
+            ) : (
+              <p className="home-review-no-comment">Avaliação sem comentário</p>
+            )}
+            <div className="home-review-meta">
+              <span
+                className="home-review-stars"
+                role="img"
+                aria-label={`${item.overallRating} de 5 estrelas`}
+              >
+                {"★".repeat(item.overallRating)}
+                {"☆".repeat(5 - item.overallRating)}
+              </span>
+              <p>
+                {item.clientName}
+                {item.serviceName ? ` · ${item.serviceName}` : ""}
+              </p>
+            </div>
+            {item.adminResponse && (
+              <small>Resposta do studio: {item.adminResponse}</small>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

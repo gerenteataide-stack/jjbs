@@ -1,6 +1,6 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { openScheduleDates, professionals } from "../../../../db/schema";
+import { openScheduleDates, professionalServices, professionals, services } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
 import { todayInFortaleza } from "../../../../lib/scheduling";
 
@@ -18,8 +18,18 @@ export async function GET(request: Request) {
   if (!professionalId || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return respond({ message: "Selecione profissional e mês válidos." }, 400);
   try {
     const db = await getDb();
-    const rows = await db.select({ date: openScheduleDates.date }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), gte(openScheduleDates.date, `${month}-01`), lte(openScheduleDates.date, `${month}-31`)));
-    return respond({ dates: rows.map(row => row.date) });
+    const [serviceRows, rows] = await Promise.all([
+      db.select({ id: services.id, name: services.name }).from(professionalServices)
+        .innerJoin(services, eq(services.id, professionalServices.serviceId))
+        .where(and(eq(professionalServices.professionalId, professionalId), eq(services.active, true))),
+      db.select({ date: openScheduleDates.date, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
+        .where(and(eq(openScheduleDates.professionalId, professionalId), gte(openScheduleDates.date, `${month}-01`), lte(openScheduleDates.date, `${month}-31`))),
+    ]);
+    const allServiceIds = serviceRows.map(service => service.id);
+    return respond({
+      services: serviceRows,
+      dates: rows.map(row => ({ date: row.date, serviceIds: row.serviceIds ?? allServiceIds })),
+    });
   } catch { return respond({ message: "Não foi possível carregar as datas." }, 500); }
 }
 export async function POST(request: Request) {
@@ -27,13 +37,30 @@ export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
     if (!body || typeof body !== "object") return respond({ message: "Dados inválidos." }, 400);
-    const { professionalId, date, open } = body as Record<string, unknown>;
+    const { professionalId, date, open, serviceIds } = body as Record<string, unknown>;
     if (typeof professionalId !== "string" || !professionalId || typeof date !== "string" || !validDate(date) || date < todayInFortaleza() || typeof open !== "boolean") return respond({ message: "Selecione uma data válida." }, 400);
     const db = await getDb();
     const [professional] = await db.select({ id: professionals.id }).from(professionals).where(eq(professionals.id, professionalId)).limit(1);
     if (!professional) return respond({ message: "Profissional não encontrada." }, 404);
-    if (open) await db.insert(openScheduleDates).values({ id: crypto.randomUUID(), professionalId, date }).onConflictDoNothing();
-    else await db.delete(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, date)));
+    if (open) {
+      if (!Array.isArray(serviceIds) || serviceIds.length < 1 || serviceIds.length > 50 || serviceIds.some(id => typeof id !== "string" || !id)) {
+        return respond({ message: "Escolha ao menos um serviço para este dia." }, 400);
+      }
+      const selectedIds = [...new Set(serviceIds as string[])];
+      if (selectedIds.length !== serviceIds.length) return respond({ message: "Revise os serviços selecionados." }, 400);
+      const allowedServices = await db.select({ id: services.id }).from(professionalServices)
+        .innerJoin(services, eq(services.id, professionalServices.serviceId))
+        .where(and(eq(professionalServices.professionalId, professionalId), eq(services.active, true)));
+      const allowedIds = new Set(allowedServices.map(service => service.id));
+      if (selectedIds.some(id => !allowedIds.has(id))) return respond({ message: "Um dos serviços não está ativo para esta profissional." }, 400);
+      await db.insert(openScheduleDates).values({ id: crypto.randomUUID(), professionalId, date, serviceIds: selectedIds })
+        .onConflictDoUpdate({
+          target: [openScheduleDates.professionalId, openScheduleDates.date],
+          set: { serviceIds: selectedIds },
+        });
+    } else {
+      await db.delete(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, date)));
+    }
     return respond({ saved: true });
   } catch { return respond({ message: "Não foi possível salvar a data." }, 500); }
 }

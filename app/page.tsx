@@ -8,6 +8,7 @@ import { getPublicSettings } from "../lib/public-settings";
 import { instagramHref, whatsappHref } from "../lib/public-links";
 import HomeInteractions from "./home-interactions";
 import HomeSchedule from "./home-schedule";
+import ReviewsHighlight from "./reviews-highlight";
 import "./home.css";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,7 @@ export default async function Home() {
         <div><h2 id="studio-title">Antes do espelho,<br />uma conversa.</h2><p>O que você quer mudar? O que quer manter? Seu atendimento começa com espaço para falar sobre o seu cabelo, seu estilo e a sua rotina.</p><p>Da escolha do serviço ao acabamento, um cuidado pensado para acompanhar você também fora do studio.</p><a className="home-link" href={whatsapp}>Converse com o studio ↗</a></div>
       </section>
       <Suspense fallback={null}><HomeWork /></Suspense>
+      <ReviewsHighlight />
       <section className="home-booking home-section" aria-labelledby="booking-title"><div><h2 id="booking-title">Reserve um tempo<br />para você.</h2><p>Escolha seu serviço, consulte os horários e faça seu agendamento pelo app.</p></div><div><a className="home-button" href="/agendar">Escolher meu horário ↗</a><a className="home-secondary" href="/lista-de-espera">Não encontrou horário? Entre na lista de espera ↗</a></div></section>
       <section className="home-faq home-section" aria-labelledby="faq-title">
         <div><h2 id="faq-title">Pode chegar<br />sem dúvidas.</h2><p>O essencial para planejar a sua visita com tranquilidade.</p><a className="home-link" href={whatsapp}>Tire uma dúvida pelo WhatsApp ↗</a></div>

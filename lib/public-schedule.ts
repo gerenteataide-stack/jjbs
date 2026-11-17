@@ -21,23 +21,26 @@ export async function getPublicSchedule() {
       db.select({ professionalId: businessHours.professionalId, weekday: businessHours.weekday, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
         .from(businessHours).innerJoin(professionals, eq(professionals.id, businessHours.professionalId))
         .where(and(eq(businessHours.active, true), eq(professionals.active, true))),
-      db.select({ professionalId: professionalServices.professionalId, duration: services.durationMinutes })
+      db.select({ professionalId: professionalServices.professionalId, serviceId: services.id, duration: services.durationMinutes })
         .from(professionalServices).innerJoin(services, eq(services.id, professionalServices.serviceId)).where(eq(services.active, true)),
       db.select({ professionalId: blockedTimes.professionalId, date: blockedTimes.blockDate, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime })
         .from(blockedTimes).where(and(gte(blockedTimes.blockDate, today), lte(blockedTimes.blockDate, end))),
       db.select({ professionalId: appointments.professionalId, date: appointments.appointmentDate, startTime: appointments.startTime, endTime: appointments.endTime })
         .from(appointments).where(and(gte(appointments.appointmentDate, today), lte(appointments.appointmentDate, end), notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon"]))),
-      db.select({ professionalId: openScheduleDates.professionalId, date: openScheduleDates.date }).from(openScheduleDates).where(and(gte(openScheduleDates.date, today), lte(openScheduleDates.date, end))),
+      db.select({ professionalId: openScheduleDates.professionalId, date: openScheduleDates.date, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(gte(openScheduleDates.date, today), lte(openScheduleDates.date, end))),
     ]);
-    const openSet = new Set(openDates.map(row => `${row.professionalId}:${row.date}`));
+    const openDatesByKey = new Map(openDates.map(row => [`${row.professionalId}:${row.date}`, row]));
     const now = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Fortaleza", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
     const unavailable = [...blocks, ...bookings];
     return { days: dates.filter(date => {
       const professionalsForDate = [...new Set(hours
-        .filter(period => period.weekday === weekdayForDate(date) && openSet.has(`${period.professionalId}:${date}`))
+        .filter(period => period.weekday === weekdayForDate(date) && openDatesByKey.has(`${period.professionalId}:${date}`))
         .map(period => period.professionalId))];
       return professionalsForDate.some(professionalId => {
-        const durations = relations.filter(row => row.professionalId === professionalId && row.duration > 0).map(row => row.duration);
+        const openDate = openDatesByKey.get(`${professionalId}:${date}`);
+        const durations = relations
+          .filter(row => row.professionalId === professionalId && row.duration > 0 && (!openDate?.serviceIds || openDate.serviceIds.includes(row.serviceId)))
+          .map(row => row.duration);
         if (!durations.length) return false;
         const periods = hours.filter(period => period.professionalId === professionalId && period.weekday === weekdayForDate(date));
         return buildConfiguredStartSlots(periods, Math.min(...durations), unavailable.filter(row => row.date === date && row.professionalId === professionalId))

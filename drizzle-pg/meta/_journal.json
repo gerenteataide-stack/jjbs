@@ -113,6 +113,13 @@
       "when": 1793639521422,
       "tag": "0015_clumsy_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794883709028,
+      "tag": "0016_flippant_beyonder",
+      "breakpoints": true
     }
   ]
 }
