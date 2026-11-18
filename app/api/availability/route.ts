@@ -1,7 +1,7 @@
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
-import { buildConfiguredStartSlots, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
+import { buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
 const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon"];
 
@@ -14,8 +14,10 @@ export async function GET(request: Request) {
   const serviceId = url.searchParams.get("serviceId")?.trim() ?? "";
   const appointmentDate = url.searchParams.get("date")?.trim() ?? "";
   const professionalId = url.searchParams.get("professionalId")?.trim() ?? "";
+  const requestedTime = url.searchParams.get("time")?.trim() ?? "";
 
   if (!serviceId && !appointmentDate) return noStore({ message: "Escolha uma data para ver os horários disponíveis." }, 400);
+  if (requestedTime && !isClockTime(requestedTime)) return noStore({ message: "Escolha um horário válido." }, 400);
   if (appointmentDate && (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate) || appointmentDate < todayInFortaleza())) {
     return noStore({ message: "Escolha uma data válida para o agendamento." }, 400);
   }
@@ -97,27 +99,35 @@ export async function GET(request: Request) {
         .map(({ id, name, title }) => ({ id, name, title }));
     }
 
-    if (!professionalId || !appointmentDate) return noStore({ professionals: dateProfessionals, slots: [] });
-    if (!appointmentDate && !availableProfessionals.some((professional) => professional.id === professionalId)) {
-      return noStore({ message: "Esta profissional não atende o serviço selecionado." }, 400);
-    }
-    if (!dateProfessionals.some((professional) => professional.id === professionalId)) return noStore({ professionals: dateProfessionals, slots: [] });
-    const hours = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
-      .from(businessHours)
-      .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(appointmentDate)), eq(businessHours.active, true)))
-      .orderBy(asc(businessHours.startTime));
-    if (!hours.length) return noStore({ professionals: dateProfessionals, slots: [] });
-
-    const [blockRows, appointmentRows] = await Promise.all([
-      db.select({ startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes)
-        .where(and(eq(blockedTimes.professionalId, professionalId), eq(blockedTimes.blockDate, appointmentDate))),
-      db.select({ startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments)
-        .where(and(eq(appointments.professionalId, professionalId), eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
+    if (!appointmentDate) return noStore({ professionals: dateProfessionals, slots: [] });
+    const professionalIds = dateProfessionals.map((professional) => professional.id);
+    if (!professionalIds.length) return noStore({ professionals: [], slots: [] });
+    const [hours, blockRows, appointmentRows] = await Promise.all([
+      db.select({ professionalId: businessHours.professionalId, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
+        .from(businessHours)
+        .where(and(inArray(businessHours.professionalId, professionalIds), eq(businessHours.weekday, weekdayForDate(appointmentDate)), eq(businessHours.active, true)))
+        .orderBy(asc(businessHours.startTime)),
+      db.select({ professionalId: blockedTimes.professionalId, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes)
+        .where(and(inArray(blockedTimes.professionalId, professionalIds), eq(blockedTimes.blockDate, appointmentDate))),
+      db.select({ professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments)
+        .where(and(inArray(appointments.professionalId, professionalIds), eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
     ]);
-
-    const unavailable = [...blockRows, ...appointmentRows];
-    const slots = buildConfiguredStartSlots(hours, service.durationMinutes, unavailable);
-    return noStore({ professionals: dateProfessionals, slots });
+    const slotsByProfessional = new Map<string, string[]>();
+    for (const professional of dateProfessionals) {
+      const unavailable = [
+        ...blockRows.filter((row) => row.professionalId === professional.id),
+        ...appointmentRows.filter((row) => row.professionalId === professional.id),
+      ];
+      slotsByProfessional.set(
+        professional.id,
+        buildConfiguredStartSlots(hours.filter((row) => row.professionalId === professional.id), service.durationMinutes, unavailable),
+      );
+    }
+    const timeProfessionals = requestedTime
+      ? dateProfessionals.filter((professional) => slotsByProfessional.get(professional.id)?.includes(requestedTime))
+      : dateProfessionals;
+    const slots = professionalId ? slotsByProfessional.get(professionalId) ?? [] : [];
+    return noStore({ professionals: timeProfessionals, slots });
   } catch {
     return noStore({ message: "A agenda ainda não está configurada neste ambiente." }, 503);
   }

@@ -276,6 +276,7 @@ export default function BookingPage() {
     const choosingDateAndTime = step === 2;
     if (step === 4) {
       queryParams.set("serviceId", serviceId);
+      queryParams.set("time", time);
       if (professionalId) queryParams.set("professionalId", professionalId);
     }
     const query = queryParams.toString();
@@ -327,7 +328,7 @@ export default function BookingPage() {
         } else {
           setProfessionals([]);
           setProfessionalId("");
-          setAvailabilityNote("Nenhuma profissional está disponível para este serviço. Fale com o studio para receber orientação.");
+          setAvailabilityNote("Nenhuma profissional atende este serviço neste horário. Volte e escolha outro horário.");
           setSlots([]);
           return;
         }
@@ -359,7 +360,7 @@ export default function BookingPage() {
     return () => {
       active = false;
     };
-  }, [serviceId, date, professionalId, step]);
+  }, [serviceId, date, professionalId, step, time]);
 
   function updateClient(field: keyof ClientData, value: string) {
     setClient((current) => ({ ...current, [field]: value }));
@@ -673,7 +674,7 @@ export default function BookingPage() {
               <div>
                 <h2 id="booking-panel-title">Escolha a profissional</h2>
                 <p className="booking-helper">
-                  Serviço: <strong>{selectedService.name}</strong> · {selectedDate}, às {time}. Escolha quem atende este serviço nesta data; vamos confirmar o horário em seguida.
+                  Serviço: <strong>{selectedService.name}</strong> · {selectedDate}, às {time}. Escolha uma profissional disponível neste horário.
                 </p>
                 <fieldset className="booking-fieldset">
                   <legend>Profissionais disponíveis</legend>
