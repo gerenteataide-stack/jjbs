@@ -4,7 +4,7 @@ import { getPublicSettings } from "../../lib/public-settings";
 /* eslint-disable @next/next/no-html-link-for-pages -- navegação pública preserva o padrão visual existente. */
 export default async function PrivacyPage() {
   const settings = await getPublicSettings();
-  let publishedPolicy: Awaited<ReturnType<typeof getActivePrivacyPolicy>> = null;
+  let publishedPolicy: { version: string; content: string; publishedAt: Date } | null = null;
   try {
     publishedPolicy = await getActivePrivacyPolicy();
   } catch {

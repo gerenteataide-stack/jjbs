@@ -122,7 +122,10 @@ export default function OpenDatesCalendar({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
-      setDates((current) => current.filter((item) => item.date !== selectedDate));
+      setDates((current) => [
+        ...current.filter((item) => item.date !== selectedDate),
+        { date: selectedDate, serviceIds: [] },
+      ]);
       setMessage("Dia fechado para novos agendamentos. Reservas existentes foram mantidas.");
     } catch (error) {
       setMessage(
@@ -142,7 +145,10 @@ export default function OpenDatesCalendar({
     year: "numeric",
     timeZone: "America/Fortaleza",
   }).format(first);
-  const selectedIsOpen = dates.some((item) => item.date === selectedDate);
+  const selectedOverride = dates.find((item) => item.date === selectedDate);
+  const selectedWeekday = selectedDate ? new Date(`${selectedDate}T12:00:00Z`).getUTCDay() : -1;
+  const selectedIsClosed = selectedOverride ? selectedOverride.serviceIds.length === 0 : !weekdays.includes(selectedWeekday);
+  const selectedIsOpen = !selectedIsClosed;
   const selectedLabel = selectedDate
     ? new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
@@ -194,7 +200,9 @@ export default function OpenDatesCalendar({
         {Array.from({ length: count }, (_, index) => {
           const day = index + 1;
           const date = `${month}-${String(day).padStart(2, "0")}`;
-          const open = dates.some((item) => item.date === date);
+          const override = dates.find((item) => item.date === date);
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      const open = override ? override.serviceIds.length > 0 : weekdays.includes(weekday);
           const selected = selectedDate === date;
           return (
             <button

@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     ]);
     return respond({
       services: serviceRows,
-      // Legacy rows without an explicit allowlist must remain closed until an admin saves services.
+      // An empty list is an explicit day-off override. Older null rows remain closed until edited.
       dates: rows.map(row => ({ date: row.date, serviceIds: row.serviceIds ?? [] })),
     });
   } catch { return respond({ message: "Não foi possível carregar as datas." }, 500); }
@@ -59,7 +59,8 @@ export async function POST(request: Request) {
           set: { serviceIds: selectedIds },
         });
     } else {
-      await db.delete(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, date)));
+      await db.insert(openScheduleDates).values({ id: crypto.randomUUID(), professionalId, date, serviceIds: [] })
+        .onConflictDoUpdate({ target: [openScheduleDates.professionalId, openScheduleDates.date], set: { serviceIds: [] } });
     }
     return respond({ saved: true });
   } catch { return respond({ message: "Não foi possível salvar a data." }, 500); }

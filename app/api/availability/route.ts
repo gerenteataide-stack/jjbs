@@ -1,6 +1,6 @@
 import { and, asc, eq, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { appointments, blockedTimes, businessHours, openScheduleDates, professionals, services } from "../../../db/schema";
+import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
 import { buildConfiguredStartSlots, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
 const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon"];
@@ -23,9 +23,12 @@ export async function GET(request: Request) {
   try {
     const db = await getDb();
     if (!serviceId) {
-      const [activeServices, openDates, hours, blockRows, appointmentRows] = await Promise.all([
-        db.select({ id: services.id, durationMinutes: services.durationMinutes })
-          .from(services).where(eq(services.active, true)),
+      const [eligiblePairs, openDates, hours, blockRows, appointmentRows] = await Promise.all([
+        db.select({ professionalId: professionals.id, serviceId: services.id, durationMinutes: services.durationMinutes })
+          .from(professionalServices)
+          .innerJoin(professionals, eq(professionals.id, professionalServices.professionalId))
+          .innerJoin(services, eq(services.id, professionalServices.serviceId))
+          .where(and(eq(professionals.active, true), eq(services.active, true))),
         db.select({ professionalId: openScheduleDates.professionalId, serviceIds: openScheduleDates.serviceIds })
           .from(openScheduleDates).innerJoin(professionals, eq(professionals.id, openScheduleDates.professionalId))
           .where(and(eq(openScheduleDates.date, appointmentDate), eq(professionals.active, true))),
@@ -41,21 +44,27 @@ export async function GET(request: Request) {
           .where(and(eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
       ]);
 
+      const openDatesByProfessional = new Map(openDates.map(row => [row.professionalId, row.serviceIds]));
+      const workingProfessionalIds = [...new Set(hours.map(row => row.professionalId))];
       const slots = new Set<string>();
       const serviceIds = new Set<string>();
-      for (const openDate of openDates) {
-        const dateServices = openDate.serviceIds === null
-          ? []
-          : activeServices.filter((service) => openDate.serviceIds?.includes(service.id));
+      for (const professionalId of workingProfessionalIds) {
+        const hasDateOverride = openDatesByProfessional.has(professionalId);
+        const openServiceIds = openDatesByProfessional.get(professionalId);
+        const dateServices = !hasDateOverride
+          ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
+          : openServiceIds?.length
+            ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
+            : [];
         for (const service of dateServices) serviceIds.add(service.id);
         const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
         if (!durations.length) continue;
         const unavailable = [
-          ...blockRows.filter((row) => row.professionalId === openDate.professionalId),
-          ...appointmentRows.filter((row) => row.professionalId === openDate.professionalId),
+          ...blockRows.filter((row) => row.professionalId === professionalId),
+          ...appointmentRows.filter((row) => row.professionalId === professionalId),
         ];
         const serviceSlots = buildConfiguredStartSlots(
-          hours.filter((row) => row.professionalId === openDate.professionalId),
+          hours.filter((row) => row.professionalId === professionalId),
           Math.min(...durations),
           unavailable,
         );
@@ -80,7 +89,11 @@ export async function GET(request: Request) {
         .from(openScheduleDates).innerJoin(professionals, eq(professionals.id, openScheduleDates.professionalId))
         .where(and(eq(openScheduleDates.date, appointmentDate), eq(professionals.active, true)))
         .orderBy(asc(professionals.displayOrder), asc(professionals.name));
-      dateProfessionals = openDates.filter((professional) => professional.serviceIds !== null && professional.serviceIds.includes(service.id))
+      const overrides = new Map(openDates.map(professional => [professional.id, professional.serviceIds]));
+      dateProfessionals = availableProfessionals.filter(professional => {
+        if (!overrides.has(professional.id)) return true;
+        return overrides.get(professional.id)?.includes(service.id) ?? false;
+      })
         .map(({ id, name, title }) => ({ id, name, title }));
     }
 
