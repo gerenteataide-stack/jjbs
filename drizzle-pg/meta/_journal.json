@@ -127,6 +127,13 @@
       "when": 1794927600000,
       "tag": "0017_lgpd_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794960273492,
+      "tag": "0018_lgpd_kit_expansion",
+      "breakpoints": true
     }
   ]
 }

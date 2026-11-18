@@ -119,7 +119,7 @@ export async function POST(request: Request) {
 
     const [openDate] = await db.select({ id: openScheduleDates.id, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professional.id), eq(openScheduleDates.date, payload.appointmentDate))).limit(1);
     if (!openDate) return json({ message: "Esta data não está liberada para agendamento." }, 409);
-    if (openDate.serviceIds && !openDate.serviceIds.includes(service.id)) {
+    if (!openDate.serviceIds || !openDate.serviceIds.includes(service.id)) {
       return json({ message: "Este serviço não está liberado para a data escolhida." }, 409);
     }
     const endTime = addMinutes(payload.startTime, service.durationMinutes);

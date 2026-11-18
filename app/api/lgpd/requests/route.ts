@@ -1,9 +1,9 @@
 import { and, count, desc, eq, gte } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { clients, lgpdRequests } from "../../../../db/schema";
+import { clients, lgpdRequestEvents, lgpdRequests } from "../../../../db/schema";
 import { getCurrentUser } from "../../../../lib/auth";
 
-const requestTypes = new Set(["access", "correction", "deletion", "revoke_consent"]);
+const requestTypes = new Set(["access", "export", "correction", "deletion", "revoke_consent", "other"]);
 function noStore(data: Record<string, unknown>, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -40,7 +40,10 @@ export async function POST(request: Request) {
     const [recent] = await db.select({ total: count() }).from(lgpdRequests).where(and(eq(lgpdRequests.userId, user.id), gte(lgpdRequests.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))));
     if ((recent?.total ?? 0) >= 3) return noStore({ message: "Você já enviou três solicitações nas últimas 24 horas." }, 429);
     const id = crypto.randomUUID();
-    await db.insert(lgpdRequests).values({ id, userId: user.id, clientId: client.id, type, details: details || null });
+    await db.batch([
+      db.insert(lgpdRequests).values({ id, userId: user.id, clientId: client.id, type, details: details || null }),
+      db.insert(lgpdRequestEvents).values({ id: crypto.randomUUID(), requestId: id, actorUserId: user.id, eventType: "created", toStatus: "pending" }),
+    ]);
     return noStore({ id, message: "Solicitação registrada para análise do studio." }, 201);
   } catch {
     return noStore({ message: "Não foi possível registrar sua solicitação." }, 500);

@@ -1,8 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { clients, pushInstallations } from "../../../../db/schema";
+import { clients, lgpdConsents, lgpdPolicyVersions, pushInstallations, salonSettings } from "../../../../db/schema";
 import { getCurrentUser } from "../../../../lib/auth";
 import { internalRoles } from "../../../../lib/permissions";
+import { getPrivacyPolicyDigest } from "../../../../lib/lgpd";
+import { defaultPublicSettings } from "../../../../lib/public-settings";
 
 function noStore(data: Record<string, unknown>, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -37,8 +39,17 @@ export async function PATCH(request: Request) {
     const body: unknown = await request.json();
     if (!isRecord(body) || typeof body.marketingConsent !== "boolean") return noStore({ message: "Revise a preferência de promoções." }, 400);
     const db = await getDb();
-    const updated = await db.update(clients).set({ marketingConsent: body.marketingConsent, updatedAt: new Date() }).where(eq(clients.userId, user.id)).returning({ id: clients.id });
-    if (!updated.length) return noStore({ message: "Sua conta ainda não está vinculada ao cadastro de clientes do studio." }, 409);
+    const [client] = await db.select({ id: clients.id, marketingConsent: clients.marketingConsent }).from(clients).where(eq(clients.userId, user.id)).limit(1);
+    if (!client) return noStore({ message: "Sua conta ainda não está vinculada ao cadastro de clientes do studio." }, 409);
+    const [activePolicy] = await db.select({ version: lgpdPolicyVersions.version, content: lgpdPolicyVersions.content }).from(lgpdPolicyVersions).where(eq(lgpdPolicyVersions.active, true)).limit(1);
+    if (body.marketingConsent && !client.marketingConsent && !activePolicy) return noStore({ message: "A administração ainda precisa publicar e revisar a política de privacidade antes de registrar novas autorizações." }, 409);
+    const [settings] = await db.select({ privacyPolicy: salonSettings.privacyPolicy }).from(salonSettings).where(eq(salonSettings.id, "studio")).limit(1);
+    const policyText = activePolicy?.content ?? settings?.privacyPolicy ?? defaultPublicSettings.privacyPolicy;
+    const policyVersion = activePolicy?.version ?? await getPrivacyPolicyDigest(policyText);
+    await db.batch([
+      db.update(clients).set({ marketingConsent: body.marketingConsent, updatedAt: new Date() }).where(eq(clients.id, client.id)),
+      ...(body.marketingConsent !== client.marketingConsent ? [db.insert(lgpdConsents).values({ id: crypto.randomUUID(), userId: user.id, clientId: client.id, purpose: "marketing", granted: body.marketingConsent, policyVersion, policyText })] : []),
+    ]);
     return noStore({ marketingConsent: body.marketingConsent });
   } catch {
     return noStore({ message: "Não foi possível salvar sua preferência." }, 500);

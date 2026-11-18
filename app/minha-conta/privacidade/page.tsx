@@ -4,13 +4,14 @@ import { FormEvent, useEffect, useState } from "react";
 
 type PrivacyRequest = { id: string; type: string; status: string; details: string | null; resolutionNote: string | null; createdAt: string };
 type ConsentRecord = { purpose: string; granted: boolean; policyVersion: string; policyText: string; recordedAt: string };
-const typeLabels: Record<string, string> = { access: "Acesso aos dados", correction: "Correção de dados", deletion: "Exclusão ou anonimização", revoke_consent: "Revogação de consentimento" };
+const typeLabels: Record<string, string> = { access: "Acesso aos dados", export: "Exportação dos dados", correction: "Correção de dados", deletion: "Exclusão ou anonimização", revoke_consent: "Revogação de consentimento", other: "Outro direito previsto na LGPD" };
 const statusLabels: Record<string, string> = { pending: "Recebida", in_review: "Em análise", completed: "Concluída", denied: "Não atendida" };
 const purposeLabels: Record<string, string> = { marketing: "Comunicações e promoções", photo_publication: "Publicação de imagens" };
 
 export default function PrivacyCenterPage() {
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [consentHistory, setConsentHistory] = useState<ConsentRecord[]>([]);
+  const [policyReviewRequired, setPolicyReviewRequired] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [photoConsent, setPhotoConsent] = useState(false);
   const [type, setType] = useState("access");
@@ -33,6 +34,7 @@ export default function PrivacyCenterPage() {
       setMarketingConsent(result.consents?.marketingConsent === true);
       setPhotoConsent(result.consents?.photoConsent === true);
       setConsentHistory(consentResult.history ?? []);
+      setPolicyReviewRequired(consentResult.policyReviewRequired === true);
     } catch (cause) {
       setError(true);
       setMessage(cause instanceof Error ? cause.message : "Não foi possível carregar a central.");
@@ -72,6 +74,7 @@ export default function PrivacyCenterPage() {
     {loading ? <p>Carregando…</p> : <>
       <section aria-labelledby="privacy-consents">
         <h2 id="privacy-consents">Suas preferências</h2>
+        {policyReviewRequired && <p role="status">A política atual está em revisão pelo studio. Você pode revogar autorizações; novas autorizações ficam disponíveis depois da publicação de uma versão revisada.</p>}
         <label><input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} /> Aceito receber comunicações e promoções do studio.</label>
         <label><input type="checkbox" checked={photoConsent} onChange={(event) => setPhotoConsent(event.target.checked)} /> Autorizo o uso de imagens minhas em materiais e canais do studio.</label>
         <button className="button button-gold" type="button" disabled={saving} onClick={() => void saveConsents()}>{saving ? "Salvando…" : "Salvar preferências"}</button>

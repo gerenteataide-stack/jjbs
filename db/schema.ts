@@ -1,9 +1,11 @@
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
   pgTable,
+  sql,
   text,
   timestamp,
   uniqueIndex,
@@ -696,5 +698,62 @@ export const lgpdConsents = pgTable(
   },
   (table) => ({
     userPurposeDateIndex: index("lgpd_consents_user_purpose_date_idx").on(table.userId, table.purpose, table.recordedAt),
+  }),
+);
+
+export const lgpdPolicyVersions = pgTable(
+  "lgpd_policy_versions",
+  {
+    version: text("version").primaryKey(),
+    content: text("content").notNull(),
+    active: boolean("active").notNull().default(false),
+    publishedBy: text("published_by").references(() => users.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    activeUnique: uniqueIndex("lgpd_policy_versions_one_active_idx")
+      .on(table.active)
+      .where(sql`${table.active} = true`),
+    publishedAtIndex: index("lgpd_policy_versions_published_at_idx").on(table.publishedAt),
+  }),
+);
+
+export const lgpdRequestEvents = pgTable(
+  "lgpd_request_events",
+  {
+    id: text("id").primaryKey(),
+    requestId: text("request_id").notNull().references(() => lgpdRequests.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    eventType: text("event_type").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    requestDateIndex: index("lgpd_request_events_request_date_idx").on(table.requestId, table.createdAt),
+  }),
+);
+
+export const lgpdSecurityIncidents = pgTable(
+  "lgpd_security_incidents",
+  {
+    id: text("id").primaryKey(),
+    summary: text("summary").notNull(),
+    severity: text("severity").notNull(),
+    status: text("status").notNull().default("investigating"),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(),
+    impact: text("impact"),
+    containment: text("containment"),
+    reportedBy: text("reported_by").references(() => users.id, { onDelete: "set null" }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => ({
+    statusDateIndex: index("lgpd_security_incidents_status_date_idx").on(table.status, table.detectedAt),
+    severityCheck: check("lgpd_security_incidents_severity_check", sql`${table.severity} in ('low', 'medium', 'high', 'critical')`),
+    statusCheck: check("lgpd_security_incidents_status_check", sql`${table.status} in ('investigating', 'contained', 'closed')`),
   }),
 );

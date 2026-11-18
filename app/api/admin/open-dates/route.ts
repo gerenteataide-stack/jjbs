@@ -25,10 +25,10 @@ export async function GET(request: Request) {
       db.select({ date: openScheduleDates.date, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
         .where(and(eq(openScheduleDates.professionalId, professionalId), gte(openScheduleDates.date, `${month}-01`), lte(openScheduleDates.date, `${month}-31`))),
     ]);
-    const allServiceIds = serviceRows.map(service => service.id);
     return respond({
       services: serviceRows,
-      dates: rows.map(row => ({ date: row.date, serviceIds: row.serviceIds ?? allServiceIds })),
+      // Legacy rows without an explicit allowlist must remain closed until an admin saves services.
+      dates: rows.map(row => ({ date: row.date, serviceIds: row.serviceIds ?? [] })),
     });
   } catch { return respond({ message: "Não foi possível carregar as datas." }, 500); }
 }

@@ -1,18 +1,11 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { clients, lgpdConsents, salonSettings } from "../../../../db/schema";
+import { clients, lgpdConsents, lgpdPolicyVersions, salonSettings } from "../../../../db/schema";
 import { getCurrentUser } from "../../../../lib/auth";
-
-const defaultPolicyText = "Seus dados são utilizados apenas para atendimento, agendamento e comunicação autorizada com o studio.";
+import { getPrivacyPolicyDigest } from "../../../../lib/lgpd";
+import { defaultPublicSettings } from "../../../../lib/public-settings";
 function noStore(data: Record<string, unknown>, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-}
-async function currentPolicy(db: Awaited<ReturnType<typeof getDb>>) {
-  const [settings] = await db.select({ privacyPolicy: salonSettings.privacyPolicy }).from(salonSettings).where(eq(salonSettings.id, "studio")).limit(1);
-  const policyText = settings?.privacyPolicy || defaultPolicyText;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(policyText));
-  const policyVersion = `sha256-${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-  return { policyText, policyVersion };
 }
 
 export async function GET(request: Request) {
@@ -21,10 +14,13 @@ export async function GET(request: Request) {
   if (user.role !== "client") return noStore({ message: "Esta área é exclusiva da conta da cliente." }, 403);
   try {
     const db = await getDb();
-    const { policyVersion } = await currentPolicy(db);
+    const [activePolicy] = await db.select({ version: lgpdPolicyVersions.version }).from(lgpdPolicyVersions).where(eq(lgpdPolicyVersions.active, true)).limit(1);
+    const [settings] = await db.select({ privacyPolicy: salonSettings.privacyPolicy }).from(salonSettings).where(eq(salonSettings.id, "studio")).limit(1);
+    const policyText = settings?.privacyPolicy ?? defaultPublicSettings.privacyPolicy;
+    const policyVersion = activePolicy?.version ?? await getPrivacyPolicyDigest(policyText);
     const rows = await db.select({ purpose: lgpdConsents.purpose, granted: lgpdConsents.granted, policyVersion: lgpdConsents.policyVersion, policyText: lgpdConsents.policyText, recordedAt: lgpdConsents.recordedAt })
       .from(lgpdConsents).where(eq(lgpdConsents.userId, user.id)).orderBy(desc(lgpdConsents.recordedAt)).limit(100);
-    return noStore({ history: rows, policyVersion });
+    return noStore({ history: rows, policyVersion, policyReviewRequired: !activePolicy });
   } catch {
     return noStore({ message: "Não foi possível carregar o histórico de consentimentos." }, 500);
   }
@@ -42,13 +38,19 @@ export async function PATCH(request: Request) {
     const db = await getDb();
     const [client] = await db.select({ id: clients.id, marketingConsent: clients.marketingConsent, photoConsent: clients.photoConsent }).from(clients).where(eq(clients.userId, user.id)).limit(1);
     if (!client) return noStore({ message: "Seu acesso ainda não está vinculado ao cadastro do studio." }, 409);
-    const { policyText, policyVersion } = await currentPolicy(db);
+    const [activePolicy] = await db.select({ version: lgpdPolicyVersions.version, content: lgpdPolicyVersions.content }).from(lgpdPolicyVersions).where(eq(lgpdPolicyVersions.active, true)).limit(1);
+    const hasNewGrant = (values.marketingConsent && !client.marketingConsent) || (values.photoConsent && !client.photoConsent);
+    if (hasNewGrant && !activePolicy) return noStore({ message: "A administração ainda precisa publicar e revisar a política de privacidade antes de registrar novas autorizações." }, 409);
+    const [settings] = await db.select({ privacyPolicy: salonSettings.privacyPolicy }).from(salonSettings).where(eq(salonSettings.id, "studio")).limit(1);
+    const policyText = activePolicy?.content ?? settings?.privacyPolicy ?? defaultPublicSettings.privacyPolicy;
+    const consentVersion = activePolicy?.version ?? await getPrivacyPolicyDigest(policyText);
+    const consentChanges = [
+      ...(values.marketingConsent !== client.marketingConsent ? [{ purpose: "marketing", granted: values.marketingConsent }] : []),
+      ...(values.photoConsent !== client.photoConsent ? [{ purpose: "photo_publication", granted: values.photoConsent }] : []),
+    ];
     await db.batch([
       db.update(clients).set({ marketingConsent: values.marketingConsent, photoConsent: values.photoConsent, updatedAt: new Date() }).where(eq(clients.id, client.id)),
-      db.insert(lgpdConsents).values([
-        { id: crypto.randomUUID(), userId: user.id, clientId: client.id, purpose: "marketing", granted: values.marketingConsent, policyVersion, policyText },
-        { id: crypto.randomUUID(), userId: user.id, clientId: client.id, purpose: "photo_publication", granted: values.photoConsent, policyVersion, policyText },
-      ]),
+      ...(consentChanges.length ? [db.insert(lgpdConsents).values(consentChanges.map((consent) => ({ id: crypto.randomUUID(), userId: user.id, clientId: client.id, ...consent, policyVersion: consentVersion, policyText })))] : []),
     ]);
     return noStore({ marketingConsent: values.marketingConsent, photoConsent: values.photoConsent, message: "Preferências atualizadas." });
   } catch {
