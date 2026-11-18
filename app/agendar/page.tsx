@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- o preview usa links nativos nas páginas públicas. */
 /* eslint-disable react-hooks/set-state-in-effect -- disponibilidade é carregada de forma assíncrona. */
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatWhatsapp, normalizeWhatsapp } from "../../lib/masks";
 import { whatsappHref } from "../../lib/public-links";
@@ -113,6 +114,7 @@ function priceLabel(service: Service) {
   return `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.priceCents / 100)}`;
 }
 export default function BookingPage() {
+  const router = useRouter();
   const settings = usePublicSettings();
   const [openDates, setOpenDates] = useState<string[]>([]);
   const [datesLoading, setDatesLoading] = useState(true);
@@ -412,11 +414,13 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
-    if (step === 5) {
-      setProfessionalId("");
-      setAvailabilityNote("");
+    const referrer = document.referrer;
+    const cameFromThisSite = referrer && new URL(referrer).origin === window.location.origin;
+    if (cameFromThisSite && window.history.length > 1) {
+      router.back();
+      return;
     }
-    setStep((current) => Math.max(current - 1, 1));
+    router.push("/");
   }
   async function submitBooking() {
     if (!acceptedPolicy)
