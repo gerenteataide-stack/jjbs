@@ -1,3 +1,5 @@
+export const ADMIN_OPEN_REQUIRED_FROM = "2027-01-01";
+
 export type TimeRange = { startTime: string; endTime: string };
 
 export function isClockTime(value: string) {

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect -- a agenda é recarregada ao trocar mês ou profissional. */
 import { useEffect, useState } from "react";
-import { todayInFortaleza } from "../../lib/scheduling";
+import { ADMIN_OPEN_REQUIRED_FROM, todayInFortaleza } from "../../lib/scheduling";
 
 type CalendarService = { id: string; name: string };
 type OpenDate = { date: string; serviceIds: string[] };
@@ -146,7 +146,11 @@ export default function OpenDatesCalendar({
     timeZone: "America/Fortaleza",
   }).format(first);
   const selectedOverride = dates.find((item) => item.date === selectedDate);
-  const selectedIsOpen = Boolean(selectedOverride?.serviceIds.length);
+  const selectedWeekday = selectedDate ? new Date(`${selectedDate}T12:00:00Z`).getUTCDay() : -1;
+  const selectedIsClosed = selectedOverride
+    ? selectedOverride.serviceIds.length === 0
+    : !selectedDate || selectedDate >= ADMIN_OPEN_REQUIRED_FROM || !weekdays.includes(selectedWeekday);
+  const selectedIsOpen = !selectedIsClosed;
   const selectedLabel = selectedDate
     ? new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
@@ -199,7 +203,10 @@ export default function OpenDatesCalendar({
           const day = index + 1;
           const date = `${month}-${String(day).padStart(2, "0")}`;
           const override = dates.find((item) => item.date === date);
-          const open = Boolean(override?.serviceIds.length);
+          const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+          const open = override
+            ? override.serviceIds.length > 0
+            : date < ADMIN_OPEN_REQUIRED_FROM && weekdays.includes(weekday);
           const selected = selectedDate === date;
           return (
             <button

@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
-import { buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
+import { ADMIN_OPEN_REQUIRED_FROM, buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
 const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon"];
 
@@ -51,10 +51,15 @@ export async function GET(request: Request) {
       const slots = new Set<string>();
       const serviceIds = new Set<string>();
       for (const professionalId of workingProfessionalIds) {
+        const hasDateOverride = openDatesByProfessional.has(professionalId);
         const openServiceIds = openDatesByProfessional.get(professionalId);
-        const dateServices = openServiceIds?.length
-          ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
-          : [];
+        const dateServices = hasDateOverride
+          ? openServiceIds?.length
+            ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
+            : []
+          : appointmentDate < ADMIN_OPEN_REQUIRED_FROM
+            ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
+            : [];
         for (const service of dateServices) serviceIds.add(service.serviceId);
         const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
         if (!durations.length) continue;
@@ -90,7 +95,7 @@ export async function GET(request: Request) {
         .orderBy(asc(professionals.displayOrder), asc(professionals.name));
       const overrides = new Map(openDates.map(professional => [professional.id, professional.serviceIds]));
       dateProfessionals = availableProfessionals.filter(professional => {
-        if (!overrides.has(professional.id)) return false;
+        if (!overrides.has(professional.id)) return appointmentDate < ADMIN_OPEN_REQUIRED_FROM;
         return overrides.get(professional.id)?.includes(service.id) ?? false;
       })
         .map(({ id, name, title }) => ({ id, name, title }));

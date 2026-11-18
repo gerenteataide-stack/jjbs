@@ -7,7 +7,7 @@ import { normalizeCoupon, validateCoupon } from "../../../lib/promotions";
 import { getPublicSettings } from "../../../lib/public-settings";
 import { sendAppointmentPush } from "../../../lib/firebase-push";
 import { internalRoles } from "../../../lib/permissions";
-import { addMinutes, isClockTime, rangesOverlap, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
+import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, isClockTime, rangesOverlap, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
 const blockedStatuses = ["cancelled_by_client", "cancelled_by_salon"];
 
@@ -118,8 +118,16 @@ export async function POST(request: Request) {
     if (!professional) return json({ message: "A profissional escolhida não está ativa." }, 400);
 
     const [openDate] = await db.select({ id: openScheduleDates.id, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professional.id), eq(openScheduleDates.date, payload.appointmentDate))).limit(1);
-    if (!openDate?.serviceIds?.includes(service.id)) {
-      return json({ message: "Esta data não foi liberada pela administração para este serviço." }, 409);
+    if (openDate && (!openDate.serviceIds || !openDate.serviceIds.includes(service.id))) {
+      return json({ message: "Este serviço não está liberado para a data escolhida." }, 409);
+    }
+    if (!openDate && payload.appointmentDate >= ADMIN_OPEN_REQUIRED_FROM) {
+      return json({ message: "Esta data ainda não foi liberada pela administração." }, 409);
+    }
+    if (!openDate) {
+      const [professionalService] = await db.select({ id: professionalServices.id }).from(professionalServices)
+        .where(and(eq(professionalServices.professionalId, professional.id), eq(professionalServices.serviceId, service.id))).limit(1);
+      if (!professionalService) return json({ message: "Este serviço não está liberado para a profissional escolhida." }, 409);
     }
     const endTime = addMinutes(payload.startTime, service.durationMinutes);
     const hours = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
