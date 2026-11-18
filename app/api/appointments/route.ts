@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, lt, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { appointmentServices, appointments, blockedTimes, businessHours, openScheduleDates, clients, notifications, professionals, services, users } from "../../../db/schema";
+import { appointmentServices, appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, clients, notifications, professionals, services, users } from "../../../db/schema";
 import { getCurrentUser } from "../../../lib/auth";
 import { normalizeWhatsapp } from "../../../lib/masks";
 import { normalizeCoupon, validateCoupon } from "../../../lib/promotions";

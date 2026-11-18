@@ -56,7 +56,7 @@ export async function GET(request: Request) {
           : openServiceIds?.length
             ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
             : [];
-        for (const service of dateServices) serviceIds.add(service.id);
+        for (const service of dateServices) serviceIds.add(service.serviceId);
         const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
         if (!durations.length) continue;
         const unavailable = [
