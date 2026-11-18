@@ -51,13 +51,10 @@ export async function GET(request: Request) {
       const slots = new Set<string>();
       const serviceIds = new Set<string>();
       for (const professionalId of workingProfessionalIds) {
-        const hasDateOverride = openDatesByProfessional.has(professionalId);
         const openServiceIds = openDatesByProfessional.get(professionalId);
-        const dateServices = !hasDateOverride
-          ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
-          : openServiceIds?.length
-            ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
-            : [];
+        const dateServices = openServiceIds?.length
+          ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
+          : [];
         for (const service of dateServices) serviceIds.add(service.serviceId);
         const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
         if (!durations.length) continue;
@@ -93,7 +90,7 @@ export async function GET(request: Request) {
         .orderBy(asc(professionals.displayOrder), asc(professionals.name));
       const overrides = new Map(openDates.map(professional => [professional.id, professional.serviceIds]));
       dateProfessionals = availableProfessionals.filter(professional => {
-        if (!overrides.has(professional.id)) return true;
+        if (!overrides.has(professional.id)) return false;
         return overrides.get(professional.id)?.includes(service.id) ?? false;
       })
         .map(({ id, name, title }) => ({ id, name, title }));
