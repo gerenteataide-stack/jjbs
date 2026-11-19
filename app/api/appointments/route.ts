@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     if (!professional) return json({ message: "A profissional escolhida não está ativa." }, 400);
 
     const [openDate] = await db.select({ id: openScheduleDates.id, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(eq(openScheduleDates.professionalId, professional.id), eq(openScheduleDates.date, payload.appointmentDate))).limit(1);
-    if (openDate && (!openDate.serviceIds || !openDate.serviceIds.includes(service.id))) {
+    if (openDate && openDate.serviceIds !== null && !openDate.serviceIds.includes(service.id)) {
       return json({ message: "Este serviço não está liberado para a data escolhida." }, 409);
     }
     if (!openDate && payload.appointmentDate >= ADMIN_OPEN_REQUIRED_FROM) {
