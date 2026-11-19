@@ -54,9 +54,11 @@ export async function GET(request: Request) {
         const hasDateOverride = openDatesByProfessional.has(professionalId);
         const openServiceIds = openDatesByProfessional.get(professionalId);
         const dateServices = hasDateOverride
-          ? openServiceIds?.length
-            ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
-            : []
+          ? openServiceIds === null
+            ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
+            : openServiceIds?.length
+              ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
+              : []
           : appointmentDate < ADMIN_OPEN_REQUIRED_FROM
             ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
             : [];
@@ -96,7 +98,8 @@ export async function GET(request: Request) {
       const overrides = new Map(openDates.map(professional => [professional.id, professional.serviceIds]));
       dateProfessionals = availableProfessionals.filter(professional => {
         if (!overrides.has(professional.id)) return appointmentDate < ADMIN_OPEN_REQUIRED_FROM;
-        return overrides.get(professional.id)?.includes(service.id) ?? false;
+        const serviceIds = overrides.get(professional.id);
+        return serviceIds === null || Boolean(serviceIds?.includes(service.id));
       })
         .map(({ id, name, title }) => ({ id, name, title }));
     }
