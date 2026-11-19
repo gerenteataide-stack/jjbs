@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatWhatsapp, normalizeWhatsapp } from "../../lib/masks";
 import { whatsappHref } from "../../lib/public-links";
 import { PublicBrand, usePublicSettings } from "../public-settings";
+import CalendarMonths from "../calendar-months";
+import { todayInFortaleza } from "../../lib/scheduling";
 
 type Service = {
   id: string;
@@ -115,6 +117,7 @@ function priceLabel(service: Service) {
 export default function BookingPage() {
   const settings = usePublicSettings();
   const [openDates, setOpenDates] = useState<string[]>([]);
+  const [today] = useState(todayInFortaleza);
   const [datesLoading, setDatesLoading] = useState(true);
   const [datesError, setDatesError] = useState("");
   const dateOptions = useMemo(
@@ -163,6 +166,23 @@ export default function BookingPage() {
   const dateServices = services.filter((service) =>
     availableServiceIds.includes(service.id),
   );
+
+  function chooseDate(value: string) {
+    if (value !== date) {
+      setTime("");
+      setAvailableServiceIds([]);
+      setProfessionals([]);
+      if (date) {
+        setServiceId("");
+        setProfessionalId("");
+        setCouponCode("");
+        setAppliedCoupon(null);
+      }
+    }
+    setDate(value);
+    setStep(2);
+    setError("");
+  }
 
   useEffect(() => {
     let active = true;
@@ -550,45 +570,15 @@ export default function BookingPage() {
                 <p className="booking-helper">
                   Toque em uma data para ver os horários de início disponíveis.
                 </p>
-                <fieldset className="booking-fieldset">
-                  <legend>Datas para agendamento</legend>
-                  {datesLoading ? (
-                    <p className="booking-helper">Carregando as datas liberadas pelo studio…</p>
-                  ) : dateOptions.length ? (
-                    <div className="booking-date-grid">
-                      {dateOptions.map((option) => (
-                        <button
-                          className={`booking-date-option ${option.value === date ? "selected" : ""}`}
-                          type="button"
-                          key={option.value}
-                          aria-pressed={option.value === date}
-                          onClick={() => {
-                            if (option.value !== date) {
-                              setTime("");
-                              setAvailableServiceIds([]);
-                              setProfessionals([]);
-                              if (date) {
-                                setServiceId("");
-                                setProfessionalId("");
-                                setCouponCode("");
-                                setAppliedCoupon(null);
-                              }
-                            }
-                            setDate(option.value);
-                            setStep(2);
-                            setError("");
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="booking-helper" role="status">
-                      {datesError || "Não há datas liberadas para agendamento no momento."}
-                    </p>
-                  )}
-                </fieldset>
+                {datesLoading ? (
+                  <p className="booking-helper">Carregando a agenda do studio…</p>
+                ) : openDates.length ? (
+                  <CalendarMonths days={openDates} today={today} selectedDate={date} onSelectDate={chooseDate} />
+                ) : (
+                  <p className="booking-helper" role="status">
+                    {datesError || "Não há datas liberadas para agendamento no momento."}
+                  </p>
+                )}
               </div>
             )}
             {step === 2 && (

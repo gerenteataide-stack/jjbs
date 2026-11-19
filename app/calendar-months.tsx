@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export default function CalendarMonths({ days, today }: { days: string[]; today: string }) {
+export default function CalendarMonths({ days, today, selectedDate, onSelectDate }: { days: string[]; today: string; selectedDate?: string; onSelectDate?: (date: string) => void }) {
   const [offset, setOffset] = useState(0);
   const first = new Date(`${today.slice(0, 7)}-01T12:00:00Z`);
   first.setUTCMonth(first.getUTCMonth() + offset);
@@ -16,7 +16,7 @@ export default function CalendarMonths({ days, today }: { days: string[]; today:
       if (day < 1 || day > count) return <td key={weekday} />;
       const date = `${month}-${String(day).padStart(2, "0")}`;
       const label = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Fortaleza" }).format(new Date(`${date}T12:00:00Z`));
-      return <td key={weekday}>{available.has(date) ? <a href={`/agendar?date=${date}`} aria-label={`Consultar horários em ${label}`} aria-current={date === today ? "date" : undefined}>{day}</a> : <span aria-label={`${label}: sem disponibilidade exibida`}>{day}</span>}</td>;
+      return <td key={weekday}>{available.has(date) ? onSelectDate ? <button type="button" className={selectedDate === date ? "selected" : undefined} onClick={() => onSelectDate(date)} aria-label={`Selecionar ${label}`} aria-pressed={selectedDate === date} aria-current={date === today ? "date" : undefined}>{day}</button> : <a href={`/agendar?date=${date}`} aria-label={`Consultar horários em ${label}`} aria-current={date === today ? "date" : undefined}>{day}</a> : <span aria-label={`${label}: sem disponibilidade exibida`}>{day}</span>}</td>;
     })}</tr>)}</tbody></table><p className="home-calendar-legend"><span aria-hidden="true" /> Dias disponíveis para agendar</p>
   </div></div>;
 }
