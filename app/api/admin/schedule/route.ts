@@ -1,11 +1,11 @@
-import { asc, eq, gte } from "drizzle-orm";
+import { and, asc, eq, gte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { blockedTimes, businessHours, professionalServices, professionals, services } from "../../../../db/schema";
-import { hasOverlappingRanges, isClockTime, todayInFortaleza } from "../../../../lib/scheduling";
+import { hasOverlappingRanges, isClockTime, timeToMinutes, todayInFortaleza } from "../../../../lib/scheduling";
 import { requireAdmin } from "../../../../lib/admin";
 import { normalizeWhatsapp } from "../../../../lib/masks";
 
-type HourInput = { weekday: number; startTime: string; endTime: string };
+type HourInput = { weekday: number; startTime: string; endTime?: string };
 
 function noStore(data: Record<string, unknown>, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -36,11 +36,14 @@ function parseHours(value: unknown): HourInput[] | null {
     const weekday = Number(row.weekday);
     const startTime = typeof row.startTime === "string" ? row.startTime : "";
     const endTime = typeof row.endTime === "string" ? row.endTime : "";
-    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isClockTime(startTime) || !isClockTime(endTime) || startTime >= endTime) return null;
-    result.push({ weekday, startTime, endTime });
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isClockTime(startTime) || (endTime && (!isClockTime(endTime) || startTime >= endTime))) return null;
+    result.push({ weekday, startTime, endTime: endTime || undefined });
   }
   for (const weekday of Array.from({ length: 7 }, (_, index) => index)) {
-    if (hasOverlappingRanges(result.filter((item) => item.weekday === weekday))) return null;
+    const dayHours = result.filter((item) => item.weekday === weekday);
+    if (new Set(dayHours.map((item) => item.startTime)).size !== dayHours.length) return null;
+    const legacyPeriods = dayHours.filter((item): item is HourInput & { endTime: string } => Boolean(item.endTime));
+    if (hasOverlappingRanges(legacyPeriods as { startTime: string; endTime: string }[])) return null;
   }
   return result;
 }
@@ -95,6 +98,14 @@ export async function POST(request: Request) {
       if (!professionalId || !hours) return noStore({ message: "Revise os horários de funcionamento." }, 400);
       const [professional] = await db.select({ id: professionals.id }).from(professionals).where(eq(professionals.id, professionalId)).limit(1);
       if (!professional) return noStore({ message: "Profissional não encontrada." }, 404);
+      const serviceRows = await db.select({ duration: services.durationMinutes }).from(professionalServices)
+        .innerJoin(services, eq(services.id, professionalServices.serviceId))
+        .where(and(eq(professionalServices.professionalId, professionalId), eq(services.active, true)));
+      const longestServiceMinutes = Math.max(60, ...serviceRows.map((service) => service.duration));
+      const endTimeForStart = (startTime: string) => {
+        const endMinutes = Math.min(23 * 60 + 59, timeToMinutes(startTime) + longestServiceMinutes);
+        return `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+      };
       const removeExisting = db.delete(businessHours).where(eq(businessHours.professionalId, professionalId));
       if (hours.length) {
         await db.batch([
@@ -104,7 +115,7 @@ export async function POST(request: Request) {
             professionalId,
             weekday: hour.weekday,
             startTime: hour.startTime,
-            endTime: hour.endTime,
+            endTime: hour.endTime ?? endTimeForStart(hour.startTime),
             breakStart: null,
             breakEnd: null,
             active: true,

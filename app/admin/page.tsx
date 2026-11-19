@@ -474,19 +474,6 @@ export default function AdminPage() {
   async function saveHours(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProfessionalId) return;
-    if (
-      hoursForm.some((day) =>
-        day.periods.some(
-          (period) => Boolean(period.startTime) !== Boolean(period.endTime),
-        ),
-      )
-    ) {
-      note(
-        "Complete a entrada e a saída de cada horário ou remova o período incompleto.",
-        true,
-      );
-      return;
-    }
     setSaving(true);
     try {
       await request("/api/admin/schedule", {
@@ -497,11 +484,10 @@ export default function AdminPage() {
           professionalId: selectedProfessionalId,
           hours: hoursForm.flatMap((day) =>
             day.periods
-              .filter((period) => period.startTime && period.endTime)
+              .filter((period) => period.startTime)
               .map((period) => ({
                 weekday: day.weekday,
                 startTime: period.startTime,
-                endTime: period.endTime,
               })),
           ),
         }),
@@ -522,7 +508,7 @@ export default function AdminPage() {
   function updateWorkPeriod(
     weekday: number,
     periodId: string,
-    field: "startTime" | "endTime",
+    field: "startTime",
     value: string,
   ) {
     setHoursForm((current) =>
@@ -532,7 +518,7 @@ export default function AdminPage() {
           period.id === periodId ? { ...period, [field]: value } : period,
         );
         const lastPeriod = periods.at(-1);
-        if (lastPeriod?.startTime && lastPeriod.endTime) {
+        if (lastPeriod?.startTime) {
           periods.push(blankPeriod(`${weekday}-${Date.now()}`));
         }
         return { ...day, periods };
@@ -548,7 +534,7 @@ export default function AdminPage() {
         return {
           ...day,
           periods:
-            !lastPeriod || lastPeriod.startTime || lastPeriod.endTime
+            !lastPeriod || lastPeriod.startTime
               ? [...periods, blankPeriod(`${weekday}-${Date.now()}`)]
               : periods,
         };
@@ -1101,8 +1087,7 @@ export default function AdminPage() {
                                 <strong>{weekdays[day.weekday]}</strong>
                                 <small>
                                   {day.periods.some(
-                                    (period) =>
-                                      period.startTime && period.endTime,
+                                      (period) => period.startTime,
                                   )
                                     ? "Dia com atendimento"
                                     : "Folga"}
@@ -1115,11 +1100,11 @@ export default function AdminPage() {
                                     key={period.id}
                                   >
                                     <label>
-                                      <span>Entrada</span>
+                                      <span>Horário de início</span>
                                       <input
                                         type="time"
                                         value={period.startTime}
-                                        aria-label={`Entrada ${index + 1} de ${weekdays[day.weekday]}`}
+                                        aria-label={`Horário de início ${index + 1} de ${weekdays[day.weekday]}`}
                                         onChange={(event) =>
                                           updateWorkPeriod(
                                             day.weekday,
@@ -1130,26 +1115,7 @@ export default function AdminPage() {
                                         }
                                       />
                                     </label>
-                                    <span className="admin-hours-separator">
-                                      até
-                                    </span>
-                                    <label>
-                                      <span>Saída</span>
-                                      <input
-                                        type="time"
-                                        value={period.endTime}
-                                        aria-label={`Saída ${index + 1} de ${weekdays[day.weekday]}`}
-                                        onChange={(event) =>
-                                          updateWorkPeriod(
-                                            day.weekday,
-                                            period.id,
-                                            "endTime",
-                                            event.target.value,
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                    {(period.startTime || period.endTime) &&
+                                    {period.startTime &&
                                       day.periods.length > 1 && (
                                         <button
                                           className="admin-hours-remove"
@@ -1168,10 +1134,7 @@ export default function AdminPage() {
                                   </div>
                                 ))}
                               </div>
-                              <p>
-                                Preencha entrada e saída. Um novo horário
-                                aparecerá automaticamente.
-                              </p>
+                              <p>Informe os horários de início dos atendimentos. Um novo campo aparece após cada horário.</p>
                             </section>
                           ))}
                         </div>

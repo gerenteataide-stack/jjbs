@@ -1,4 +1,4 @@
-import { asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { appointmentServices, appointments, clients, serviceCategories, services } from "../../../../db/schema";
 import { requirePermission } from "../../../../lib/admin";
@@ -32,7 +32,10 @@ export async function GET(request: Request) {
         .innerJoin(clients, eq(clients.id, appointments.clientId))
         .leftJoin(appointmentServices, eq(appointmentServices.appointmentId, appointments.id))
         .leftJoin(services, eq(services.id, appointmentServices.serviceId))
-        .where(gte(appointments.appointmentDate, today))
+        .where(and(
+          gte(appointments.appointmentDate, today),
+          notInArray(appointments.status, ["cancelled_by_salon"]),
+        ))
         .orderBy(asc(appointments.appointmentDate), asc(appointments.startTime))
         .limit(80),
       db.select({ id: clients.id, name: clients.name, phone: clients.phone, email: clients.email, createdAt: clients.createdAt })
