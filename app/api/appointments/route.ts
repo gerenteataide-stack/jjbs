@@ -159,10 +159,16 @@ export async function POST(request: Request) {
       return json({ message: "Este horário acabou de ser reservado. Escolha outro horário disponível." }, 409);
     }
 
-    const [linkedClient] = currentUser
+    const [linkedClient] = currentUser?.role === "client"
       ? await db.select({ id: clients.id }).from(clients).where(eq(clients.userId, currentUser.id)).limit(1)
       : [];
     const clientId = rescheduledAppointment?.clientId ?? linkedClient?.id ?? crypto.randomUUID();
+    const clientValues = {
+      name: payload.client.name,
+      phone: payload.client.phone,
+      whatsapp: payload.client.phone,
+      ...(payload.client.email ? { email: payload.client.email } : {}),
+    };
     const appointmentId = crypto.randomUUID();
     const appointmentServiceId = crypto.randomUUID();
 
@@ -222,6 +228,7 @@ export async function POST(request: Request) {
 
     if (rescheduledAppointment) {
       await db.batch([
+        db.update(clients).set(clientValues).where(eq(clients.id, clientId)),
         db.insert(appointments).values(appointmentValues),
         db.insert(appointmentServices).values(appointmentServiceValues),
         db.update(appointments).set({ status: "rescheduled", updatedAt: new Date() }).where(and(eq(appointments.id, rescheduledAppointment.id), inArray(appointments.status, ["pending_confirmation", "confirmed"]))),
@@ -230,6 +237,7 @@ export async function POST(request: Request) {
       ]);
     } else if (linkedClient) {
       await db.batch([
+        db.update(clients).set(clientValues).where(eq(clients.id, linkedClient.id)),
         db.insert(appointments).values(appointmentValues),
         db.insert(appointmentServices).values(appointmentServiceValues),
         ...(appointmentNotification ? [appointmentNotification] : []),
@@ -239,11 +247,11 @@ export async function POST(request: Request) {
       await db.batch([
         db.insert(clients).values({
           id: clientId,
-          userId: currentUser?.id,
-          name: currentUser?.name ?? payload.client.name,
-          phone: currentUser?.phone ?? payload.client.phone,
-          whatsapp: currentUser?.phone ?? payload.client.phone,
-          email: currentUser?.email ?? payload.client.email,
+          userId: currentUser?.role === "client" ? currentUser.id : undefined,
+          name: payload.client.name || (currentUser?.role === "client" ? currentUser.name : ""),
+          phone: payload.client.phone || (currentUser?.role === "client" ? currentUser.phone ?? "" : ""),
+          whatsapp: payload.client.phone || (currentUser?.role === "client" ? currentUser.phone ?? "" : ""),
+          email: payload.client.email || (currentUser?.role === "client" ? currentUser.email : undefined),
           notes: payload.client.notes,
         }),
         db.insert(appointments).values(appointmentValues),
