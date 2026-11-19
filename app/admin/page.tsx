@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { revealEditor } from "../../lib/editor-navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Fragment, useEffect, useState } from "react";
 import CategoryManagement from "./category-management";
 import ClientManagement from "./client-management";
 import CommunicationManagement from "./communication-management";
@@ -19,9 +19,12 @@ import { formatWhatsapp } from "../../lib/masks";
 import { PublicBrand } from "../public-settings";
 import PushNotificationsControl from "../push-notifications-control";
 import OpenDatesCalendar from "./open-dates-calendar";
+import CalendarMonths from "../calendar-months";
 
 type Appointment = {
   id: string;
+  professionalId: string;
+  serviceId: string | null;
   appointmentDate: string;
   startTime: string;
   endTime: string;
@@ -255,6 +258,11 @@ export default function AdminPage() {
     useState<ProfessionalForm>(emptyProfessional);
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("");
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
+  const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
+  const [rescheduleDates, setRescheduleDates] = useState<string[]>([]);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [hoursForm, setHoursForm] = useState<DayHours[]>(defaultHours());
   const [blockForm, setBlockForm] = useState<BlockForm>({
     blockDate: "",
@@ -356,15 +364,16 @@ export default function AdminPage() {
     setMessage(value);
     setError(isError);
   }
-  async function updateStatus(id: string, status: string) {
+  async function updateStatus(id: string, status: string, appointmentDate?: string, startTime?: string) {
     setSaving(true);
     try {
       await request("/api/admin/appointments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, appointmentDate, startTime }),
       });
-      note("Status atualizado.");
+      note(appointmentDate && startTime ? `Agendamento reagendado para ${appointmentDate.split("-").reverse().join("/")}, às ${startTime}.` : "Status atualizado.");
+      if (appointmentDate && startTime) setReschedulingAppointment(null);
       await load();
     } catch (cause) {
       note(
@@ -375,6 +384,37 @@ export default function AdminPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+  async function beginReschedule(appointment: Appointment) {
+    setReschedulingAppointment(appointment);
+    setRescheduleDate("");
+    setRescheduleSlots([]);
+    setRescheduleLoading(true);
+    try {
+      const result = await request("/api/booking-dates");
+      setRescheduleDates(Array.isArray(result.dates) ? result.dates : []);
+    } catch (cause) {
+      setRescheduleDates([]);
+      note(cause instanceof Error ? cause.message : "Não foi possível carregar a agenda.", true);
+    } finally {
+      setRescheduleLoading(false);
+    }
+  }
+  async function loadRescheduleSlots(appointment: Appointment, date: string) {
+    setRescheduleDate(date);
+    setRescheduleSlots([]);
+    if (!appointment.serviceId) return note("Este agendamento não tem serviço associado para verificar os horários.", true);
+    setRescheduleLoading(true);
+    try {
+      const query = new URLSearchParams({ serviceId: appointment.serviceId, professionalId: appointment.professionalId, date });
+      const result = await request(`/api/availability?${query}`);
+      setRescheduleSlots(Array.isArray(result.slots) ? result.slots : []);
+      if (!result.slots?.length) note("Não há horários livres para esta profissional nesse dia.", true);
+    } catch (cause) {
+      note(cause instanceof Error ? cause.message : "Não foi possível consultar os horários.", true);
+    } finally {
+      setRescheduleLoading(false);
     }
   }
   function editService(service: Service) {
@@ -841,7 +881,8 @@ export default function AdminPage() {
                       </thead>
                       <tbody>
                         {agenda.map((appointment) => (
-                          <tr key={appointment.id}>
+                          <Fragment key={appointment.id}>
+                          <tr>
                             <td>
                               <strong>
                                 {appointment.appointmentDate
@@ -870,12 +911,10 @@ export default function AdminPage() {
                                 <select
                                   value={appointment.status}
                                   disabled={saving}
-                                  onChange={(event) =>
-                                    void updateStatus(
-                                      appointment.id,
-                                      event.target.value,
-                                    )
-                                  }
+                                  onChange={(event) => {
+                                    if (event.target.value === "rescheduled") void beginReschedule(appointment);
+                                    else void updateStatus(appointment.id, event.target.value);
+                                  }}
                                 >
                                   {statuses.map(([value, label]) => (
                                     <option value={value} key={value}>
@@ -886,6 +925,26 @@ export default function AdminPage() {
                               </label>
                             </td>
                           </tr>
+                          {reschedulingAppointment?.id === appointment.id && (
+                            <tr className="admin-reschedule-row">
+                              <td colSpan={5}>
+                                <section className="admin-reschedule-panel">
+                                  <div className="admin-reschedule-heading">
+                                    <div><span>Reagendar</span><h3>Escolha o novo dia e horário</h3></div>
+                                    <button className="text-button" type="button" onClick={() => setReschedulingAppointment(null)}>Cancelar</button>
+                                  </div>
+                                  {rescheduleLoading && !rescheduleDates.length ? <p>Carregando agenda…</p> : rescheduleDates.length ? (
+                                    <CalendarMonths days={rescheduleDates} today={data?.today ?? ""} selectedDate={rescheduleDate} onSelectDate={(date) => void loadRescheduleSlots(appointment, date)} />
+                                  ) : <p>Não há dias disponíveis para reagendamento.</p>}
+                                  {rescheduleLoading && rescheduleDate && <p>Consultando horários…</p>}
+                                  {rescheduleDate && !rescheduleLoading && <div className="admin-reschedule-times" aria-label="Horários disponíveis">
+                                    {rescheduleSlots.length ? rescheduleSlots.map((slot) => <button className={`booking-time-option ${slot === appointment.startTime ? "selected" : ""}`} type="button" key={slot} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, slot)}>{slot}</button>) : <p>Não há horários livres para esta profissional nesse dia.</p>}
+                                  </div>}
+                                </section>
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>

@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { appointmentServices, appointments, clients, notifications, services } from "../../../../db/schema";
+import { appointmentServices, appointments, blockedTimes, businessHours, clients, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
+import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, isClockTime, rangesOverlap, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
 
 const validStatuses = new Set(["pending_confirmation", "confirmed", "in_service", "completed", "cancelled_by_client", "cancelled_by_salon", "no_show", "rescheduled"]);
 
@@ -22,9 +23,12 @@ export async function PATCH(request: Request) {
     const db = await getDb();
     const [existing] = await db.select({
       id: appointments.id,
+      clientId: appointments.clientId,
+      professionalId: appointments.professionalId,
       status: appointments.status,
       appointmentDate: appointments.appointmentDate,
       startTime: appointments.startTime,
+      endTime: appointments.endTime,
       clientUserId: clients.userId,
       serviceName: services.name,
     }).from(appointments)
@@ -36,8 +40,51 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ message: "Agendamento não encontrado." }, { status: 404, headers: { "Cache-Control": "no-store" } });
 
     const nextStatus = String(body.status);
+    const nextDate = typeof body.appointmentDate === "string" ? body.appointmentDate.trim() : "";
+    const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : "";
+    let nextEndTime = existing.endTime;
+    if (nextDate || nextStartTime) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime)) {
+        return Response.json({ message: "Escolha uma nova data e um horário válidos." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      }
+      const duration = timeToMinutes(existing.endTime) - timeToMinutes(existing.startTime);
+      nextEndTime = addMinutes(nextStartTime, duration);
+      if (!isClockTime(nextEndTime)) return Response.json({ message: "O atendimento não cabe nesse horário." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+
+      const [dateOverride] = await db.select({ serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
+        .where(and(eq(openScheduleDates.professionalId, existing.professionalId), eq(openScheduleDates.date, nextDate))).limit(1);
+      const linkedServices = await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
+        .where(eq(appointmentServices.appointmentId, existing.id));
+      if (!dateOverride && nextDate >= ADMIN_OPEN_REQUIRED_FROM) {
+        return Response.json({ message: "Essa data ainda não foi liberada pela administração." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      }
+      if (dateOverride?.serviceIds && linkedServices.some((item) => !dateOverride.serviceIds?.includes(item.serviceId))) {
+        return Response.json({ message: "O serviço deste agendamento não está liberado para essa data." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      }
+      if (!dateOverride && linkedServices.length) {
+        const serviceRelations = await db.select({ serviceId: professionalServices.serviceId }).from(professionalServices)
+          .where(and(eq(professionalServices.professionalId, existing.professionalId), inArray(professionalServices.serviceId, linkedServices.map((item) => item.serviceId))));
+        if (serviceRelations.length !== linkedServices.length) return Response.json({ message: "A profissional não atende esse serviço na data escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      }
+      const periods = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd }).from(businessHours)
+        .where(and(eq(businessHours.professionalId, existing.professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
+      const insideWorkPeriod = periods.some((period) => nextStartTime === period.startTime && nextEndTime <= period.endTime
+        && !(period.breakStart && period.breakEnd && rangesOverlap({ startTime: nextStartTime, endTime: nextEndTime }, { startTime: period.breakStart, endTime: period.breakEnd })));
+      if (!insideWorkPeriod) return Response.json({ message: "Esse horário não está disponível no expediente da profissional." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      const [blocked] = await db.select({ id: blockedTimes.id }).from(blockedTimes).where(and(
+        eq(blockedTimes.professionalId, existing.professionalId), eq(blockedTimes.blockDate, nextDate),
+        lt(blockedTimes.startTime, nextEndTime), gt(blockedTimes.endTime, nextStartTime),
+      )).limit(1);
+      if (blocked) return Response.json({ message: "Esse horário está bloqueado pelo studio." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      const [conflict] = await db.select({ id: appointments.id }).from(appointments).where(and(
+        eq(appointments.professionalId, existing.professionalId), eq(appointments.appointmentDate, nextDate),
+        notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]),
+        lt(appointments.startTime, nextEndTime), gt(appointments.endTime, nextStartTime), ne(appointments.id, existing.id),
+      )).limit(1);
+      if (conflict) return Response.json({ message: "Esse horário acabou de ser ocupado. Escolha outro." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    }
     const [updated] = await db.update(appointments)
-      .set({ status: nextStatus, updatedAt: new Date() })
+      .set(nextDate ? { appointmentDate: nextDate, startTime: nextStartTime, endTime: nextEndTime, updatedAt: new Date() } : { status: nextStatus, updatedAt: new Date() })
       .where(and(eq(appointments.id, existing.id), eq(appointments.status, existing.status)))
       .returning({ id: appointments.id, status: appointments.status });
     if (!updated) return Response.json({ message: "O agendamento foi atualizado em outro acesso. Recarregue a agenda." }, { status: 409, headers: { "Cache-Control": "no-store" } });

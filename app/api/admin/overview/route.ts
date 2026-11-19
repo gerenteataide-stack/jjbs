@@ -20,6 +20,8 @@ export async function GET(request: Request) {
     const [agenda, clientRows, serviceRows, categoryRows] = await Promise.all([
       db.select({
         id: appointments.id,
+        professionalId: appointments.professionalId,
+        serviceId: appointmentServices.serviceId,
         appointmentDate: appointments.appointmentDate,
         startTime: appointments.startTime,
         endTime: appointments.endTime,
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
         .orderBy(asc(appointments.appointmentDate), asc(appointments.startTime))
         .limit(80),
       db.select({ id: clients.id, name: clients.name, phone: clients.phone, email: clients.email, createdAt: clients.createdAt })
-        .from(clients).orderBy(desc(clients.createdAt)).limit(100),
+        .from(clients).where(eq(clients.active, true)).orderBy(desc(clients.createdAt)).limit(100),
       db.select({
         id: services.id,
         categoryId: services.categoryId,

@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import {
   appointmentServices,
@@ -158,12 +158,14 @@ export async function GET(request: Request) {
       .from(appointments)
       .innerJoin(clients, eq(clients.id, appointments.clientId))
       .leftJoin(professionals, eq(professionals.id, appointments.professionalId))
+      .where(notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]))
       .orderBy(desc(appointments.appointmentDate), desc(appointments.startTime))
       .limit(500);
     const appointmentIds = appointmentRows.map((row) => row.id);
     const [methodRows, paymentRows, serviceRows] = await Promise.all([
       db.select().from(paymentMethods).orderBy(asc(paymentMethods.displayOrder)),
-      db
+      appointmentIds.length
+        ? db
         .select({
           id: payments.id,
           appointmentId: payments.appointmentId,
@@ -181,8 +183,10 @@ export async function GET(request: Request) {
         })
         .from(payments)
         .leftJoin(paymentMethods, eq(paymentMethods.id, payments.paymentMethodId))
+        .where(inArray(payments.appointmentId, appointmentIds))
         .orderBy(desc(payments.createdAt))
-        .limit(3000),
+        .limit(3000)
+        : Promise.resolve([]),
       appointmentIds.length
         ? db
             .select({
