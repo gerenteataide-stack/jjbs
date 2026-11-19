@@ -27,7 +27,7 @@ export async function getPublicSchedule() {
       db.select({ professionalId: blockedTimes.professionalId, date: blockedTimes.blockDate, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime })
         .from(blockedTimes).where(and(gte(blockedTimes.blockDate, today), lte(blockedTimes.blockDate, end))),
       db.select({ professionalId: appointments.professionalId, date: appointments.appointmentDate, startTime: appointments.startTime, endTime: appointments.endTime })
-        .from(appointments).where(and(gte(appointments.appointmentDate, today), lte(appointments.appointmentDate, end), notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon"]))),
+        .from(appointments).where(and(gte(appointments.appointmentDate, today), lte(appointments.appointmentDate, end), notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]))),
       db.select({ professionalId: openScheduleDates.professionalId, date: openScheduleDates.date, serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates).where(and(gte(openScheduleDates.date, today), lte(openScheduleDates.date, end))),
     ]);
     const openDatesByKey = new Map(openDates.map(row => [`${row.professionalId}:${row.date}`, row]));

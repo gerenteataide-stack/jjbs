@@ -9,7 +9,7 @@ import { sendAppointmentPush } from "../../../lib/firebase-push";
 import { internalRoles } from "../../../lib/permissions";
 import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, isClockTime, rangesOverlap, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
-const blockedStatuses = ["cancelled_by_client", "cancelled_by_salon"];
+const blockedStatuses = ["cancelled_by_client", "cancelled_by_salon", "rescheduled"];
 
 type BookingPayload = {
   serviceId: string;

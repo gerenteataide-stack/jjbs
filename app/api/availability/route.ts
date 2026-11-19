@@ -3,7 +3,7 @@ import { getDb } from "../../../db";
 import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
 import { ADMIN_OPEN_REQUIRED_FROM, buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
-const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon"];
+const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon", "rescheduled"];
 
 function noStore(data: Record<string, unknown>, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
