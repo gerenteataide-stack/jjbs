@@ -42,6 +42,11 @@ export async function PATCH(request: Request) {
     const nextStatus = String(body.status);
     const nextDate = typeof body.appointmentDate === "string" ? body.appointmentDate.trim() : "";
     const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : "";
+    if (body.serviceId !== undefined && typeof body.serviceId !== "string") {
+      return Response.json({ message: "Escolha um serviço válido para o reagendamento." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    }
+    const nextServiceId = typeof body.serviceId === "string" ? body.serviceId.trim() : "";
+    let nextService: { id: string; durationMinutes: number; priceCents: number | null } | null = null;
     let nextEndTime = existing.endTime;
     if (nextDate || nextStartTime) {
       const professionalId = existing.professionalId;
@@ -51,18 +56,28 @@ export async function PATCH(request: Request) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime)) {
         return Response.json({ message: "Escolha uma nova data e um horário válidos." }, { status: 400, headers: { "Cache-Control": "no-store" } });
       }
-      const duration = timeToMinutes(existing.endTime) - timeToMinutes(existing.startTime);
+      if (nextServiceId) {
+        const [service] = await db.select({ id: services.id, durationMinutes: services.durationMinutes, priceCents: services.priceCents }).from(services)
+          .innerJoin(professionalServices, eq(professionalServices.serviceId, services.id))
+          .where(and(eq(services.id, nextServiceId), eq(services.active, true), eq(professionalServices.professionalId, professionalId)))
+          .limit(1);
+        if (!service) return Response.json({ message: "Este serviço não está ativo para a profissional escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+        nextService = service;
+      }
+      const duration = nextService?.durationMinutes ?? timeToMinutes(existing.endTime) - timeToMinutes(existing.startTime);
       nextEndTime = addMinutes(nextStartTime, duration);
       if (!isClockTime(nextEndTime)) return Response.json({ message: "O atendimento não cabe nesse horário." }, { status: 409, headers: { "Cache-Control": "no-store" } });
 
       const [dateOverride] = await db.select({ serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
         .where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, nextDate))).limit(1);
-      const linkedServices = await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
-        .where(eq(appointmentServices.appointmentId, existing.id));
+      const linkedServices = nextServiceId
+        ? [{ serviceId: nextServiceId }]
+        : await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
+          .where(eq(appointmentServices.appointmentId, existing.id));
       if (!dateOverride && nextDate >= ADMIN_OPEN_REQUIRED_FROM) {
         return Response.json({ message: "Essa data ainda não foi liberada pela administração." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
-      if (dateOverride?.serviceIds && linkedServices.some((item) => !dateOverride.serviceIds?.includes(item.serviceId))) {
+      if (dateOverride && dateOverride.serviceIds !== null && linkedServices.some((item) => !dateOverride.serviceIds?.includes(item.serviceId))) {
         return Response.json({ message: "O serviço deste agendamento não está liberado para essa data." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
       if (!dateOverride && linkedServices.length) {
@@ -87,10 +102,30 @@ export async function PATCH(request: Request) {
       )).limit(1);
       if (conflict) return Response.json({ message: "Esse horário acabou de ser ocupado. Escolha outro." }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
-    const [updated] = await db.update(appointments)
-      .set(nextDate ? { appointmentDate: nextDate, startTime: nextStartTime, endTime: nextEndTime, updatedAt: new Date() } : { status: nextStatus, updatedAt: new Date() })
+    const update = db.update(appointments)
+      .set(nextDate ? {
+        appointmentDate: nextDate,
+        startTime: nextStartTime,
+        endTime: nextEndTime,
+        ...(nextService ? { totalEstimatedCents: nextService.priceCents, promotionId: null, couponCode: null, discountCents: 0 } : {}),
+        updatedAt: new Date(),
+      } : { status: nextStatus, updatedAt: new Date() })
       .where(and(eq(appointments.id, existing.id), eq(appointments.status, existing.status)))
       .returning({ id: appointments.id, status: appointments.status });
+    const updateResults = await db.batch([
+      update,
+      ...(nextService ? [
+        db.delete(appointmentServices).where(eq(appointmentServices.appointmentId, existing.id)),
+        db.insert(appointmentServices).values({
+          id: crypto.randomUUID(),
+          appointmentId: existing.id,
+          serviceId: nextService.id,
+          priceCents: nextService.priceCents,
+          durationMinutes: nextService.durationMinutes,
+        }),
+      ] : []),
+    ]);
+    const [updated] = updateResults[0] as { id: string; status: string }[];
     if (!updated) return Response.json({ message: "O agendamento foi atualizado em outro acesso. Recarregue a agenda." }, { status: 409, headers: { "Cache-Control": "no-store" } });
 
     if (nextStatus === "confirmed" && existing.status !== "confirmed" && existing.clientUserId) {
