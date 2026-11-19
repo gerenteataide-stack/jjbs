@@ -9,7 +9,6 @@ import { instagramHref, whatsappHref } from "../lib/public-links";
 import HomeInteractions from "./home-interactions";
 import HomeSchedule from "./home-schedule";
 import ReviewsHighlight from "./reviews-highlight";
-import "./home.css";
 
 export const dynamic = "force-dynamic";
 

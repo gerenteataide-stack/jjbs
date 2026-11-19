@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./app-interface.css";
+import "./home.css";
 import PwaUpdateManager from "./pwa-update-manager";
 import PwaInstallInvitation from "./pwa-install-invitation";
 import { PublicSettingsProvider } from "./public-settings";
