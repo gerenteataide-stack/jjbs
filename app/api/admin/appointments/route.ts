@@ -44,6 +44,10 @@ export async function PATCH(request: Request) {
     const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : "";
     let nextEndTime = existing.endTime;
     if (nextDate || nextStartTime) {
+      const professionalId = existing.professionalId;
+      if (!professionalId) {
+        return Response.json({ message: "Este agendamento não tem uma profissional associada e não pode ser reagendado." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime)) {
         return Response.json({ message: "Escolha uma nova data e um horário válidos." }, { status: 400, headers: { "Cache-Control": "no-store" } });
       }
@@ -52,7 +56,7 @@ export async function PATCH(request: Request) {
       if (!isClockTime(nextEndTime)) return Response.json({ message: "O atendimento não cabe nesse horário." }, { status: 409, headers: { "Cache-Control": "no-store" } });
 
       const [dateOverride] = await db.select({ serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
-        .where(and(eq(openScheduleDates.professionalId, existing.professionalId), eq(openScheduleDates.date, nextDate))).limit(1);
+        .where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, nextDate))).limit(1);
       const linkedServices = await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
         .where(eq(appointmentServices.appointmentId, existing.id));
       if (!dateOverride && nextDate >= ADMIN_OPEN_REQUIRED_FROM) {
@@ -63,21 +67,21 @@ export async function PATCH(request: Request) {
       }
       if (!dateOverride && linkedServices.length) {
         const serviceRelations = await db.select({ serviceId: professionalServices.serviceId }).from(professionalServices)
-          .where(and(eq(professionalServices.professionalId, existing.professionalId), inArray(professionalServices.serviceId, linkedServices.map((item) => item.serviceId))));
+          .where(and(eq(professionalServices.professionalId, professionalId), inArray(professionalServices.serviceId, linkedServices.map((item) => item.serviceId))));
         if (serviceRelations.length !== linkedServices.length) return Response.json({ message: "A profissional não atende esse serviço na data escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
       const periods = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd }).from(businessHours)
-        .where(and(eq(businessHours.professionalId, existing.professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
+        .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
       const insideWorkPeriod = periods.some((period) => nextStartTime === period.startTime && nextEndTime <= period.endTime
         && !(period.breakStart && period.breakEnd && rangesOverlap({ startTime: nextStartTime, endTime: nextEndTime }, { startTime: period.breakStart, endTime: period.breakEnd })));
       if (!insideWorkPeriod) return Response.json({ message: "Esse horário não está disponível no expediente da profissional." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       const [blocked] = await db.select({ id: blockedTimes.id }).from(blockedTimes).where(and(
-        eq(blockedTimes.professionalId, existing.professionalId), eq(blockedTimes.blockDate, nextDate),
+        eq(blockedTimes.professionalId, professionalId), eq(blockedTimes.blockDate, nextDate),
         lt(blockedTimes.startTime, nextEndTime), gt(blockedTimes.endTime, nextStartTime),
       )).limit(1);
       if (blocked) return Response.json({ message: "Esse horário está bloqueado pelo studio." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       const [conflict] = await db.select({ id: appointments.id }).from(appointments).where(and(
-        eq(appointments.professionalId, existing.professionalId), eq(appointments.appointmentDate, nextDate),
+        eq(appointments.professionalId, professionalId), eq(appointments.appointmentDate, nextDate),
         notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]),
         lt(appointments.startTime, nextEndTime), gt(appointments.endTime, nextStartTime), ne(appointments.id, existing.id),
       )).limit(1);
