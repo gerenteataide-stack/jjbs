@@ -262,6 +262,10 @@ export default function AdminPage() {
   const [rescheduleDates, setRescheduleDates] = useState<string[]>([]);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
+  const [rescheduleTime, setRescheduleTime] = useState("");
+  const [rescheduleServices, setRescheduleServices] = useState<Service[]>([]);
+  const [rescheduleServiceId, setRescheduleServiceId] = useState("");
+  const [rescheduleServicesLoading, setRescheduleServicesLoading] = useState(false);
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [hoursForm, setHoursForm] = useState<DayHours[]>(defaultHours());
   const [blockForm, setBlockForm] = useState<BlockForm>({
@@ -364,15 +368,15 @@ export default function AdminPage() {
     setMessage(value);
     setError(isError);
   }
-  async function updateStatus(id: string, status: string, appointmentDate?: string, startTime?: string) {
+  async function updateStatus(id: string, status: string, appointmentDate?: string, startTime?: string, serviceId?: string) {
     setSaving(true);
     try {
       await request("/api/admin/appointments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status, appointmentDate, startTime }),
+        body: JSON.stringify({ id, status, appointmentDate, startTime, serviceId }),
       });
-      note(appointmentDate && startTime ? `Agendamento reagendado para ${appointmentDate.split("-").reverse().join("/")}, às ${startTime}.` : "Status atualizado.");
+      note(appointmentDate && startTime ? `Agendamento reagendado para ${appointmentDate.split("-").reverse().join("/")}, às ${startTime}${serviceId ? `, serviço: ${data?.services.find((service) => service.id === serviceId)?.name ?? "atualizado"}` : ""}.` : "Status atualizado.");
       if (appointmentDate && startTime) setReschedulingAppointment(null);
       await load();
     } catch (cause) {
@@ -390,6 +394,9 @@ export default function AdminPage() {
     setReschedulingAppointment(appointment);
     setRescheduleDate("");
     setRescheduleSlots([]);
+    setRescheduleTime("");
+    setRescheduleServices([]);
+    setRescheduleServiceId("");
     setRescheduleLoading(true);
     try {
       const result = await request("/api/booking-dates");
@@ -404,6 +411,9 @@ export default function AdminPage() {
   async function loadRescheduleSlots(appointment: Appointment, date: string) {
     setRescheduleDate(date);
     setRescheduleSlots([]);
+    setRescheduleTime("");
+    setRescheduleServices([]);
+    setRescheduleServiceId("");
     if (!appointment.serviceId) return note("Este agendamento não tem serviço associado para verificar os horários.", true);
     setRescheduleLoading(true);
     try {
@@ -415,6 +425,38 @@ export default function AdminPage() {
       note(cause instanceof Error ? cause.message : "Não foi possível consultar os horários.", true);
     } finally {
       setRescheduleLoading(false);
+    }
+  }
+  async function loadRescheduleServices(appointment: Appointment, date: string, time: string) {
+    setRescheduleTime(time);
+    setRescheduleServiceId("");
+    setRescheduleServices([]);
+    setRescheduleServicesLoading(true);
+    const options = (data?.services ?? []).filter((service) => service.active);
+    try {
+      const available = await Promise.all(options.map(async (service) => {
+        try {
+          const query = new URLSearchParams({
+            serviceId: service.id,
+            professionalId: appointment.professionalId,
+            date,
+            time,
+          });
+          const response = await fetch(`/api/availability?${query}`, { cache: "no-store" });
+          const result = await response.json().catch(() => ({}));
+          return response.ok &&
+            Array.isArray(result.professionals) &&
+            result.professionals.some((professional: { id?: string }) => professional.id === appointment.professionalId) &&
+            Array.isArray(result.slots) && result.slots.includes(time)
+            ? service
+            : null;
+        } catch {
+          return null;
+        }
+      }));
+      setRescheduleServices(available.filter((service): service is Service => service !== null));
+    } finally {
+      setRescheduleServicesLoading(false);
     }
   }
   function editService(service: Service) {
@@ -930,7 +972,7 @@ export default function AdminPage() {
                               <td colSpan={5}>
                                 <section className="admin-reschedule-panel">
                                   <div className="admin-reschedule-heading">
-                                    <div><span>Reagendar</span><h3>Escolha o novo dia e horário</h3></div>
+                                    <div><span>Reagendar</span><h3>Escolha dia, horário e serviço</h3></div>
                                     <button className="text-button" type="button" onClick={() => setReschedulingAppointment(null)}>Cancelar</button>
                                   </div>
                                   {rescheduleLoading && !rescheduleDates.length ? <p>Carregando agenda…</p> : rescheduleDates.length ? (
@@ -938,7 +980,17 @@ export default function AdminPage() {
                                   ) : <p>Não há dias disponíveis para reagendamento.</p>}
                                   {rescheduleLoading && rescheduleDate && <p>Consultando horários…</p>}
                                   {rescheduleDate && !rescheduleLoading && <div className="admin-reschedule-times" aria-label="Horários disponíveis">
-                                    {rescheduleSlots.length ? rescheduleSlots.map((slot) => <button className={`booking-time-option ${slot === appointment.startTime ? "selected" : ""}`} type="button" key={slot} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, slot)}>{slot}</button>) : <p>Não há horários livres para esta profissional nesse dia.</p>}
+                                    {rescheduleSlots.length ? rescheduleSlots.map((slot) => <button className={`booking-time-option ${slot === rescheduleTime ? "selected" : ""}`} type="button" key={slot} onClick={() => void loadRescheduleServices(appointment, rescheduleDate, slot)}>{slot}</button>) : <p>Não há horários livres para esta profissional nesse dia.</p>}
+                                  </div>}
+                                  {rescheduleTime && <div className="admin-reschedule-service-choice">
+                                    <h4>Serviços disponíveis às {rescheduleTime}</h4>
+                                    {rescheduleServicesLoading ? <p>Consultando serviços para este horário…</p> : rescheduleServices.length ? <div className="booking-service-grid">
+                                      {rescheduleServices.map((service) => <button className={`booking-service-option ${service.id === rescheduleServiceId ? "selected" : ""}`} type="button" key={service.id} aria-pressed={service.id === rescheduleServiceId} onClick={() => setRescheduleServiceId(service.id)}>
+                                        <small>{service.categoryName ?? "Serviço"}</small><strong>{service.name}</strong><span>{service.durationMinutes} min · {service.priceCents === null ? "Sob consulta" : money(service.priceCents)}</span>
+                                      </button>)}
+                                    </div> : <p>Nenhum serviço disponível para esta profissional nesse horário.</p>}
+                                    <button className="admin-reschedule-confirm" type="button" disabled={saving || rescheduleServicesLoading || !rescheduleServiceId} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, rescheduleTime, rescheduleServiceId)}>Confirmar reagendamento</button>
+                                  </div>
                                   </div>}
                                 </section>
                               </td>
