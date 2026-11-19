@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- o preview usa links nativos nas páginas públicas. */
 /* eslint-disable react-hooks/set-state-in-effect -- disponibilidade é carregada de forma assíncrona. */
 
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatWhatsapp, normalizeWhatsapp } from "../../lib/masks";
 import { whatsappHref } from "../../lib/public-links";
@@ -114,7 +113,6 @@ function priceLabel(service: Service) {
   return `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.priceCents / 100)}`;
 }
 export default function BookingPage() {
-  const router = useRouter();
   const settings = usePublicSettings();
   const [openDates, setOpenDates] = useState<string[]>([]);
   const [datesLoading, setDatesLoading] = useState(true);
@@ -414,17 +412,7 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
-    let previousPage = "/";
-    try {
-      const referrer = new URL(document.referrer);
-      const isBookingPage = referrer.pathname === "/agendar" || referrer.pathname.startsWith("/agendar/") || referrer.pathname === "/agenda";
-      if (referrer.origin === window.location.origin && !isBookingPage) {
-        previousPage = `${referrer.pathname}${referrer.search}${referrer.hash}`;
-      }
-    } catch {
-      // Agenda opened directly: return to the site home.
-    }
-    router.replace(previousPage);
+    setStep((current) => Math.max(1, current - 1));
   }
   async function submitBooking() {
     if (!acceptedPolicy)
