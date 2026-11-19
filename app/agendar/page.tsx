@@ -414,13 +414,17 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
-    const referrer = document.referrer;
-    const cameFromThisSite = referrer && new URL(referrer).origin === window.location.origin;
-    if (cameFromThisSite && window.history.length > 1) {
-      router.back();
-      return;
+    let previousPage = "/";
+    try {
+      const referrer = new URL(document.referrer);
+      const isBookingPage = referrer.pathname === "/agendar" || referrer.pathname.startsWith("/agendar/") || referrer.pathname === "/agenda";
+      if (referrer.origin === window.location.origin && !isBookingPage) {
+        previousPage = `${referrer.pathname}${referrer.search}${referrer.hash}`;
+      }
+    } catch {
+      // Agenda opened directly: return to the site home.
     }
-    router.push("/");
+    router.replace(previousPage);
   }
   async function submitBooking() {
     if (!acceptedPolicy)
