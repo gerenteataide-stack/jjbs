@@ -158,7 +158,7 @@ export async function GET(request: Request) {
       .from(appointments)
       .innerJoin(clients, eq(clients.id, appointments.clientId))
       .leftJoin(professionals, eq(professionals.id, appointments.professionalId))
-      .where(notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]))
+      .where(notInArray(appointments.status, ["cancelled", "cancelled_by_client", "cancelled_by_salon", "rescheduled"]))
       .orderBy(desc(appointments.appointmentDate), desc(appointments.startTime))
       .limit(500);
     const appointmentIds = appointmentRows.map((row) => row.id);
