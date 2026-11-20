@@ -2,9 +2,7 @@
   "name": "jaqueline-beauty-studio",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "engines": { "node": ">=22.13.0" },
   "scripts": {
     "dev": "node scripts/run-vinext.mjs dev",
     "build": "node scripts/build.mjs",
@@ -32,7 +30,7 @@
     "@cloudflare/vite-plugin": "1.67.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
-    "@types/react": "19.2.3",
+    "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.2.1",
     "@vitejs/plugin-rsc": "0.5.39",
@@ -48,13 +46,14 @@
   },
   "overrides": {
     "@firebase/firestore": {
-      "@grpc/grpc-js": {
-        "google-gax": {
-          "google-auth-library": {
-            "gaxios": "7.3.1"
-          },
-          "rimraf": "6.1.4"
-        }
+      "@grpc/grpc-js": "1.14.7"
+    },
+    "@google-cloud/firestore-api": {
+      "google-gax": {
+        "google-auth-library": {
+          "gaxios": "7.3.1"
+        },
+        "rimraf": "6.1.4"
       }
     },
     "@esbuild-kit/core-utils": {
