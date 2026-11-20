@@ -167,6 +167,9 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 @media (max-width: 600px) { .admin-appointment-edit-form { grid-template-columns: 1fr; } .admin-appointment-edit-form > p, .admin-appointment-edit-form > button { grid-column: auto; } }
 
 .admin-appointment-edit-calendar,.admin-appointment-edit-times{display:grid;gap:10px;grid-column:1/-1;min-width:0}
+.admin-professional-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.admin-professional-actions .admin-professional-delete{color:#e49a8f}
+.admin-professional-actions button:disabled{opacity:.5;cursor:wait}
 .admin-appointment-edit-calendar>strong,.admin-appointment-edit-times>strong{color:var(--paper);font-size:12px;font-weight:500}
 .admin-appointment-edit-calendar>p,.admin-appointment-edit-times>p{color:#aaa196;font-size:12px;margin:0}
 .admin-appointment-edit-calendar .home-calendars{margin:0;width:100%}

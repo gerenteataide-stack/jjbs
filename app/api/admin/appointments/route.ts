@@ -1,6 +1,6 @@
 import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { appointmentServices, appointments, blockedTimes, businessHours, clients, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
+import { appointmentServices, appointments, businessHours, clients, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
 import { normalizeWhatsapp } from "../../../../lib/masks";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
@@ -102,18 +102,13 @@ export async function PATCH(request: Request) {
       if (serviceRelations.length !== linkedServices.length) return Response.json({ message: "A profissional não atende esse serviço na data escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       const periods = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd }).from(businessHours)
         .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
-      const [blockedRows, appointmentRows] = await Promise.all([
-        db.select({ startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes).where(and(
-          eq(blockedTimes.professionalId, professionalId), eq(blockedTimes.blockDate, nextDate),
-        )),
-        db.select({ startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments).where(and(
+      const appointmentRows = await db.select({ startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments).where(and(
           eq(appointments.professionalId, professionalId), eq(appointments.appointmentDate, nextDate),
           notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]),
           ne(appointments.id, existing.id),
-        )),
-      ]);
-      const availableSlots = buildConfiguredStartSlots(periods, duration, [...blockedRows, ...appointmentRows]);
-      if (!availableSlots.includes(nextStartTime)) return Response.json({ message: "Esse horário não está disponível. Verifique o expediente, os bloqueios e outros agendamentos." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+        ));
+      const availableSlots = buildConfiguredStartSlots(periods, duration, appointmentRows);
+      if (!availableSlots.includes(nextStartTime)) return Response.json({ message: "Esse horário não está disponível. Verifique o expediente e os outros agendamentos." }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
     const update = db.update(appointments)
       .set(scheduleChanged ? {

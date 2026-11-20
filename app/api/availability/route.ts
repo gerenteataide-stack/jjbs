@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
+import { appointments, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
 import { requireAdmin } from "../../../lib/admin";
 import { buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   try {
     const db = await getDb();
     if (!serviceId) {
-      const [eligiblePairs, openDates, hours, blockRows, appointmentRows] = await Promise.all([
+      const [eligiblePairs, openDates, hours, appointmentRows] = await Promise.all([
         db.select({ professionalId: professionals.id, serviceId: services.id, durationMinutes: services.durationMinutes })
           .from(professionalServices)
           .innerJoin(professionals, eq(professionals.id, professionalServices.professionalId))
@@ -42,9 +42,6 @@ export async function GET(request: Request) {
           .from(businessHours)
           .innerJoin(professionals, eq(professionals.id, businessHours.professionalId))
           .where(and(eq(businessHours.weekday, weekdayForDate(appointmentDate)), eq(businessHours.active, true), eq(professionals.active, true))),
-        db.select({ professionalId: blockedTimes.professionalId, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime })
-          .from(blockedTimes)
-          .where(eq(blockedTimes.blockDate, appointmentDate)),
         db.select({ id: appointments.id, professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime })
           .from(appointments)
           .where(and(eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
@@ -63,10 +60,7 @@ export async function GET(request: Request) {
               ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
               : []
           : [];
-        const unavailable = [
-          ...blockRows.filter((row) => row.professionalId === professionalId),
-          ...appointmentRows.filter((row) => row.professionalId === professionalId && row.id !== excludeAppointmentId),
-        ];
+        const unavailable = appointmentRows.filter((row) => row.professionalId === professionalId && row.id !== excludeAppointmentId);
         const professionalHours = hours.filter((row) => row.professionalId === professionalId);
         for (const service of dateServices) {
           const serviceSlots = buildConfiguredStartSlots(professionalHours, service.durationMinutes, unavailable);
@@ -110,22 +104,17 @@ export async function GET(request: Request) {
     if (!appointmentDate) return noStore({ professionals: dateProfessionals, slots: [] });
     const professionalIds = dateProfessionals.map((professional) => professional.id);
     if (!professionalIds.length) return noStore({ professionals: [], slots: [] });
-    const [hours, blockRows, appointmentRows] = await Promise.all([
+    const [hours, appointmentRows] = await Promise.all([
       db.select({ professionalId: businessHours.professionalId, startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd })
         .from(businessHours)
         .where(and(inArray(businessHours.professionalId, professionalIds), eq(businessHours.weekday, weekdayForDate(appointmentDate)), eq(businessHours.active, true)))
         .orderBy(asc(businessHours.startTime)),
-      db.select({ professionalId: blockedTimes.professionalId, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes)
-        .where(and(inArray(blockedTimes.professionalId, professionalIds), eq(blockedTimes.blockDate, appointmentDate))),
       db.select({ id: appointments.id, professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments)
         .where(and(inArray(appointments.professionalId, professionalIds), eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
     ]);
     const slotsByProfessional = new Map<string, string[]>();
     for (const professional of dateProfessionals) {
-      const unavailable = [
-        ...blockRows.filter((row) => row.professionalId === professional.id),
-        ...appointmentRows.filter((row) => row.professionalId === professional.id && row.id !== excludeAppointmentId),
-      ];
+      const unavailable = appointmentRows.filter((row) => row.professionalId === professional.id && row.id !== excludeAppointmentId);
       slotsByProfessional.set(
         professional.id,
         buildConfiguredStartSlots(hours.filter((row) => row.professionalId === professional.id), service.durationMinutes, unavailable),

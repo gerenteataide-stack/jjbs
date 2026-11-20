@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, lt, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { appointmentServices, appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, clients, notifications, professionals, services, users } from "../../../db/schema";
+import { appointmentServices, appointments, businessHours, openScheduleDates, professionalServices, clients, notifications, professionals, services, users } from "../../../db/schema";
 import { getCurrentUser } from "../../../lib/auth";
 import { normalizeWhatsapp } from "../../../lib/masks";
 import { normalizeCoupon, validateCoupon } from "../../../lib/promotions";
@@ -138,11 +138,6 @@ export async function POST(request: Request) {
       !(period.breakStart && period.breakEnd && rangesOverlap(selectedRange, { startTime: period.breakStart, endTime: period.breakEnd })),
     );
     if (!insideWorkingPeriod) return json({ message: "O horário escolhido está fora do expediente da profissional." }, 400);
-
-    const blocked = await db.select({ id: blockedTimes.id }).from(blockedTimes).where(and(
-      eq(blockedTimes.professionalId, professional.id), eq(blockedTimes.blockDate, payload.appointmentDate), lt(blockedTimes.startTime, endTime), gt(blockedTimes.endTime, payload.startTime),
-    )).limit(1);
-    if (blocked[0]) return json({ message: "Este horário foi bloqueado pelo studio. Escolha outra opção." }, 409);
 
     const conflictRows = await db.select({ id: appointments.id }).from(appointments).where(and(
       eq(appointments.professionalId, professional.id),

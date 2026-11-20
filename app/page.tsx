@@ -102,6 +102,21 @@ export default async function Home() {
         </div>
         <figure className="home-portrait"><img src={portrait} alt={`${name} no Beauty Studio`} fetchPriority="high" /></figure>
       </section>
+      <section className="home-hair-length home-section" aria-labelledby="hair-length-title">
+        <div className="home-hair-length-copy">
+          <h2 id="hair-length-title">Veja o tamanho do seu cabelo</h2>
+          <p>Uma referência de comprimento para a Progressiva Orgânica.</p>
+        </div>
+        <figure className="home-hair-length-visual">
+          <img src="/hair-length-guide.png" alt="Cabelo longo e liso, com indicações de comprimento P, M, G e EX." loading="lazy" />
+          <figcaption aria-label="Comprimentos: P, M, G e EX">
+            <span className="home-hair-guide home-hair-guide-p" aria-hidden="true"><span>P</span><i /></span>
+            <span className="home-hair-guide home-hair-guide-m" aria-hidden="true"><i /><span>M</span></span>
+            <span className="home-hair-guide home-hair-guide-g" aria-hidden="true"><span>G</span><i /></span>
+            <span className="home-hair-guide home-hair-guide-ex" aria-hidden="true"><i /><span>EX</span></span>
+          </figcaption>
+        </figure>
+      </section>
       <Suspense fallback={<HomeScheduleLoading />}><HomeSchedule /></Suspense>
       <Suspense fallback={<HomeServicesLoading />}><HomeServices /></Suspense>
       <section className="home-about home-section" id="studio" aria-labelledby="studio-title">

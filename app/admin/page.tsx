@@ -103,19 +103,10 @@ type DayHours = {
   weekday: number;
   periods: WorkPeriod[];
 };
-type Block = {
-  id: string;
-  professionalId: string;
-  blockDate: string;
-  startTime: string;
-  endTime: string;
-  reason: string | null;
-};
 type ScheduleData = {
   professionals: Professional[];
   services: Array<{ id: string; name: string; active: boolean }>;
   hours: Hours[];
-  blocks: Block[];
   relations: Array<{ professionalId: string; serviceId: string }>;
 };
 type ProfessionalForm = {
@@ -125,12 +116,6 @@ type ProfessionalForm = {
   phone: string;
   active: boolean;
   serviceIds: string[];
-};
-type BlockForm = {
-  blockDate: string;
-  startTime: string;
-  endTime: string;
-  reason: string;
 };
 
 const emptyService: ServiceForm = {
@@ -278,13 +263,6 @@ export default function AdminPage() {
   const [rescheduleServicesLoading, setRescheduleServicesLoading] = useState(false);
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [hoursForm, setHoursForm] = useState<DayHours[]>(defaultHours());
-  const [blockForm, setBlockForm] = useState<BlockForm>({
-    blockDate: "",
-    startTime: "09:00",
-    endTime: "10:00",
-    reason: "",
-  });
-
   async function request(url: string, options?: RequestInit) {
     const response = await fetch(url, { cache: "no-store", ...options });
     const result = await response.json().catch(() => ({}));
@@ -666,6 +644,28 @@ export default function AdminPage() {
       setSaving(false);
     }
   }
+  async function deleteProfessional(professional: Professional) {
+    const confirmed = window.confirm(
+      `Excluir ${professional.name} da equipe? Se houver agendamentos vinculados, o cadastro ficará inativo para preservar o histórico.`,
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const result = await request("/api/admin/schedule", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "professional", id: professional.id }),
+      });
+      if (professionalForm.id === professional.id) setProfessionalForm(emptyProfessional);
+      if (selectedProfessionalId === professional.id) setSelectedScheduleDate(null);
+      note(result.message ?? "Profissional removida.");
+      await loadSchedule();
+    } catch (cause) {
+      note(cause instanceof Error ? cause.message : "Não foi possível excluir a profissional.", true);
+    } finally {
+      setSaving(false);
+    }
+  }
   async function saveHours(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProfessionalId) return;
@@ -735,60 +735,6 @@ export default function AdminPage() {
         };
       }),
     );
-  }
-  async function saveBlock(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedProfessionalId) return;
-    setSaving(true);
-    try {
-      await request("/api/admin/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "block",
-          professionalId: selectedProfessionalId,
-          ...blockForm,
-        }),
-      });
-      setBlockForm({
-        blockDate: "",
-        startTime: "09:00",
-        endTime: "10:00",
-        reason: "",
-      });
-      note("Horário bloqueado.");
-      await loadSchedule();
-    } catch (cause) {
-      note(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível criar o bloqueio.",
-        true,
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function removeBlock(id: string) {
-    setSaving(true);
-    try {
-      await request("/api/admin/schedule", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      note("Bloqueio removido.");
-      await loadSchedule();
-    } catch (cause) {
-      note(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível remover o bloqueio.",
-        true,
-      );
-    } finally {
-      setSaving(false);
-    }
   }
   function toggleService(id: string) {
     setProfessionalForm((current) => ({
@@ -1299,13 +1245,24 @@ export default function AdminPage() {
                               {professional.active ? "ativa" : "inativa"}
                             </small>
                           </button>
-                          <button
-                            className="text-button"
-                            type="button"
-                            onClick={() => editProfessional(professional)}
-                          >
-                            Editar
-                          </button>
+                          <div className="admin-professional-actions">
+                            <button
+                              className="text-button"
+                              type="button"
+                              disabled={saving}
+                              onClick={() => editProfessional(professional)}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              className="text-button admin-professional-delete"
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void deleteProfessional(professional)}
+                            >
+                              Excluir
+                            </button>
+                          </div>
                         </article>
                       ))}
                     </div>
@@ -1400,124 +1357,7 @@ export default function AdminPage() {
                           Salvar expediente <span>↗</span>
                         </button>
                       </form>}
-                      <section className="admin-schedule-blocks">
-                        <form
-                          className="admin-service-form"
-                          onSubmit={saveBlock}
-                        >
-                          <div className="admin-panel-heading">
-                            <div>
-                              <span>Bloqueio pontual</span>
-                              <h2>Fechar um horário</h2>
-                            </div>
-                          </div>
-                          <div className="admin-form-grid">
-                            <label>
-                              Data
-                              <input
-                                type="date"
-                                value={blockForm.blockDate}
-                                onChange={(event) =>
-                                  setBlockForm((current) => ({
-                                    ...current,
-                                    blockDate: event.target.value,
-                                  }))
-                                }
-                                required
-                              />
-                            </label>
-                            <label>
-                              Motivo
-                              <input
-                                value={blockForm.reason}
-                                onChange={(event) =>
-                                  setBlockForm((current) => ({
-                                    ...current,
-                                    reason: event.target.value,
-                                  }))
-                                }
-                                maxLength={240}
-                                placeholder="Ex.: compromisso"
-                              />
-                            </label>
-                            <label>
-                              Início
-                              <input
-                                type="time"
-                                value={blockForm.startTime}
-                                onChange={(event) =>
-                                  setBlockForm((current) => ({
-                                    ...current,
-                                    startTime: event.target.value,
-                                  }))
-                                }
-                                required
-                              />
-                            </label>
-                            <label>
-                              Fim
-                              <input
-                                type="time"
-                                value={blockForm.endTime}
-                                onChange={(event) =>
-                                  setBlockForm((current) => ({
-                                    ...current,
-                                    endTime: event.target.value,
-                                  }))
-                                }
-                                required
-                              />
-                            </label>
-                          </div>
-                          <button
-                            className="button button-gold"
-                            type="submit"
-                            disabled={saving}
-                          >
-                            Bloquear horário <span>↗</span>
-                          </button>
-                        </form>
-                        <section className="admin-panel">
-                          <div className="admin-panel-heading">
-                            <div>
-                              <span>Próximos bloqueios</span>
-                              <h2>Indisponibilidades</h2>
-                            </div>
-                          </div>
-                          <div className="admin-professional-list">
-                            {schedule?.blocks
-                              .filter(
-                                (block) =>
-                                  block.professionalId ===
-                                  selectedProfessionalId,
-                              )
-                              .map((block) => (
-                                <article key={block.id}>
-                                  <div>
-                                    <strong>
-                                      {block.blockDate
-                                        .split("-")
-                                        .reverse()
-                                        .join("/")}{" "}
-                                      · {block.startTime}–{block.endTime}
-                                    </strong>
-                                    <small>
-                                      {block.reason ?? "Sem motivo informado"}
-                                    </small>
-                                  </div>
-                                  <button
-                                    className="text-button"
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() => void removeBlock(block.id)}
-                                  >
-                                    Remover
-                                  </button>
-                                </article>
-                              )) ?? <p>Nenhum bloqueio futuro.</p>}
-                          </div>
-                        </section>
-                      </section>
+
                     </>
                   )}
                 </div>
