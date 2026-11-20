@@ -85,6 +85,9 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .home-reviews-eyebrow{display:block;margin-bottom:14px;color:var(--home-accent);font-size:13px;letter-spacing:.14em;text-transform:uppercase}
 .home-review-carousel{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}
 .home-review-carousel article{display:flex;flex-direction:column;justify-content:space-between;min-width:0;min-height:210px;padding:26px;border:1px solid #3a3932;background:#1d1d19}
+.home-review-carousel article.home-review-featured{min-height:250px;border-color:var(--home-accent);background:linear-gradient(145deg,rgba(198,166,106,.16),#1d1d19 65%)}
+.home-review-featured-label{margin-bottom:18px;color:var(--home-accent);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.home-review-carousel article.home-review-featured blockquote{font-size:clamp(23px,2.5vw,31px)}
 .home-review-carousel blockquote{margin:0 0 24px;font-family:'Playfair Display',Georgia,serif;font-size:clamp(19px,2vw,25px);line-height:1.45}
 .home-review-no-comment{margin:0 0 24px;color:#c7c5bd}
 .home-review-meta{display:grid;gap:6px}
