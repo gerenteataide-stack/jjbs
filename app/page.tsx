@@ -5,6 +5,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { portfolioItems, serviceCategories, services } from "../db/schema";
 import { getPublicSettings } from "../lib/public-settings";
+import { formatDurationInHours } from "../lib/scheduling";
 import { instagramHref, whatsappHref } from "../lib/public-links";
 import HomeInteractions from "./home-interactions";
 import HomeSchedule from "./home-schedule";
@@ -56,7 +57,7 @@ async function HomeServices() {
   return (
     <section className="home-services home-section" aria-labelledby="services-title">
       <div className="home-section-top"><h2 id="services-title">O seu próximo cuidado.</h2><a className="home-link" href="/servicos">Todos os serviços ↗</a></div>
-      {serviceRows.length ? <div className="home-service-list">{serviceRows.map(service => <a href="/agendar" key={service.id} className="home-service"><h3>{service.name}</h3><p>{service.description}</p><div><span>{service.duration >= 60 ? `${Math.floor(service.duration / 60)}h${service.duration % 60 ? String(service.duration % 60).padStart(2, "0") : ""}` : `${service.duration} min`}</span><strong>{service.price === null ? "Sob consulta" : `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.price / 100)}`}</strong></div><span className="home-service-arrow" aria-hidden="true">↗</span></a>)}</div> : <div className="home-service-empty"><p>Uma mudança de visual ou um momento de cuidado? Conheça os serviços e escolha o atendimento para você.</p><a className="home-button" href="/servicos">Explorar serviços ↗</a></div>}
+      {serviceRows.length ? <div className="home-service-list">{serviceRows.map(service => <a href="/agendar" key={service.id} className="home-service"><h3>{service.name}</h3><p>{service.description}</p><div><span>{formatDurationInHours(service.duration)}</span><strong>{service.price === null ? "Sob consulta" : `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.price / 100)}`}</strong></div><span className="home-service-arrow" aria-hidden="true">↗</span></a>)}</div> : <div className="home-service-empty"><p>Uma mudança de visual ou um momento de cuidado? Conheça os serviços e escolha o atendimento para você.</p><a className="home-button" href="/servicos">Explorar serviços ↗</a></div>}
     </section>
   );
 }
@@ -110,10 +111,14 @@ export default async function Home() {
         <figure className="home-hair-length-visual">
           <img src="/hair-length-guide.png" alt="Cabelo longo e liso, com indicações de comprimento P, M, G e EX." loading="lazy" />
           <figcaption aria-label="Comprimentos: P, M, G e EX">
-            <span className="home-hair-guide home-hair-guide-p" aria-hidden="true"><span>P</span><i /></span>
-            <span className="home-hair-guide home-hair-guide-m" aria-hidden="true"><i /><span>M</span></span>
-            <span className="home-hair-guide home-hair-guide-g" aria-hidden="true"><span>G</span><i /></span>
-            <span className="home-hair-guide home-hair-guide-ex" aria-hidden="true"><i /><span>EX</span></span>
+            <span className="home-hair-guide home-hair-guide-p" aria-hidden="true" />
+            <span className="home-hair-size home-hair-size-p" aria-hidden="true">P</span>
+            <span className="home-hair-guide home-hair-guide-m" aria-hidden="true" />
+            <span className="home-hair-size home-hair-size-m" aria-hidden="true">M</span>
+            <span className="home-hair-guide home-hair-guide-g" aria-hidden="true" />
+            <span className="home-hair-size home-hair-size-g" aria-hidden="true">G</span>
+            <span className="home-hair-guide home-hair-guide-ex" aria-hidden="true" />
+            <span className="home-hair-size home-hair-size-ex" aria-hidden="true">EX</span>
           </figcaption>
         </figure>
       </section>

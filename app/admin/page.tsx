@@ -16,6 +16,7 @@ import SettingsManagement from "./settings-management";
 import UsersManagement from "./users-management";
 import type { Permission } from "../../lib/permissions";
 import { formatWhatsapp } from "../../lib/masks";
+import { formatDurationInHours } from "../../lib/scheduling";
 import { PublicBrand } from "../public-settings";
 import PushNotificationsControl from "../push-notifications-control";
 import OpenDatesCalendar from "./open-dates-calendar";
@@ -72,7 +73,7 @@ type ServiceForm = {
   categoryId: string;
   name: string;
   description: string;
-  durationMinutes: string;
+  durationHours: string;
   priceType: string;
   price: string;
   active: boolean;
@@ -122,7 +123,7 @@ const emptyService: ServiceForm = {
   categoryId: "",
   name: "",
   description: "",
-  durationMinutes: "60",
+  durationHours: "1",
   priceType: "fixed",
   price: "",
   active: true,
@@ -557,7 +558,7 @@ export default function AdminPage() {
       categoryId: service.categoryId ?? "",
       name: service.name,
       description: service.description,
-      durationMinutes: String(service.durationMinutes),
+      durationHours: String(Math.round((service.durationMinutes / 60) * 100) / 100),
       priceType: service.priceType,
       price:
         service.priceCents === null ? "" : String(service.priceCents / 100),
@@ -581,7 +582,7 @@ export default function AdminPage() {
           categoryId: serviceForm.categoryId || null,
           name: serviceForm.name,
           description: serviceForm.description,
-          durationMinutes: Number(serviceForm.durationMinutes),
+          durationMinutes: Math.round(Number(serviceForm.durationHours.replace(",", ".")) * 60),
           priceType: serviceForm.priceType,
           priceCents,
           active: serviceForm.active,
@@ -1076,7 +1077,7 @@ export default function AdminPage() {
                                     <h4>Serviços disponíveis às {rescheduleTime}</h4>
                                     {rescheduleServicesLoading ? <p>Consultando serviços para este horário…</p> : rescheduleServices.length ? <div className="booking-service-grid">
                                       {rescheduleServices.map((service) => <button className={`booking-service-option ${service.id === rescheduleServiceId ? "selected" : ""}`} type="button" key={service.id} aria-pressed={service.id === rescheduleServiceId} onClick={() => setRescheduleServiceId(service.id)}>
-                                        <small>{service.categoryName ?? "Serviço"}</small><strong>{service.name}</strong><span>{service.durationMinutes} min · {service.priceCents === null ? "Sob consulta" : money(service.priceCents)}</span>
+                                        <small>{service.categoryName ?? "Serviço"}</small><strong>{service.name}</strong><span>{formatDurationInHours(service.durationMinutes)} · {service.priceCents === null ? "Sob consulta" : money(service.priceCents)}</span>
                                       </button>)}
                                     </div> : <p>Nenhum serviço disponível para esta profissional nesse horário.</p>}
                                     <button className="admin-reschedule-confirm" type="button" disabled={saving || rescheduleServicesLoading || !rescheduleServiceId} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, rescheduleTime, rescheduleServiceId)}>Confirmar reagendamento</button>
@@ -1283,9 +1284,7 @@ export default function AdminPage() {
                             </h2>
                           </div>
                           <p>
-                            Estes horários se aplicam às datas liberadas no mesmo dia da semana. Escreva a entrada e a saída. Ao completar um
-                            período, outro campo aparece para você acrescentar
-                            mais um horário.
+                            Estes horários se aplicam às datas liberadas no mesmo dia da semana. Informe apenas o início de cada período; o intervalo até o próximo horário será calculado automaticamente.
                           </p>
                         </div>
                         <div className="admin-hours-list">
@@ -1345,7 +1344,7 @@ export default function AdminPage() {
                                   </div>
                                 ))}
                               </div>
-                              <p>Informe os horários de início dos atendimentos. Um novo campo aparece após cada horário.</p>
+                              <p>Adicione outro horário de início para abrir um novo período. O sistema calcula os horários disponíveis entre um início e o próximo.</p>
                             </section>
                           ))}
                         </div>
@@ -1439,17 +1438,17 @@ export default function AdminPage() {
                     </label>
                     <div className="admin-form-grid">
                       <label>
-                        Duração (minutos)
+                        Duração (horas)
                         <input
                           type="number"
-                          min="15"
-                          max="720"
-                          step="15"
-                          value={serviceForm.durationMinutes}
+                          min="0.25"
+                          max="12"
+                          step="0.01"
+                          value={serviceForm.durationHours}
                           onChange={(event) =>
                             setServiceForm((current) => ({
                               ...current,
-                              durationMinutes: event.target.value,
+                              durationHours: event.target.value,
                             }))
                           }
                           required
@@ -1543,7 +1542,7 @@ export default function AdminPage() {
                             {money(service.priceCents)}
                           </strong>
                           <small>
-                            {service.durationMinutes} minutos ·{" "}
+                            {formatDurationInHours(service.durationMinutes)} ·{" "}
                             {service.active ? "ativo" : "inativo"}
                           </small>
                           <button

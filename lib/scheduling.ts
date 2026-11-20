@@ -14,6 +14,10 @@ export function addMinutes(startTime: string, durationMinutes: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+export function formatDurationInHours(durationMinutes: number) {
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(durationMinutes / 60)} h`;
+}
+
 export function rangesOverlap(first: TimeRange, second: TimeRange) {
   return first.startTime < second.endTime && first.endTime > second.startTime;
 }
@@ -36,21 +40,23 @@ export function buildConfiguredStartSlots(periods: { startTime: string; endTime:
   if (durationMinutes <= 0) return [];
 
   const slots: string[] = [];
-  for (const hours of [...periods].sort((first, second) => first.startTime.localeCompare(second.startTime))) {
+  const orderedPeriods = [...periods].sort((first, second) => first.startTime.localeCompare(second.startTime));
+  for (const [index, hours] of orderedPeriods.entries()) {
     // A configured business-hours row is a start time. Its stored endTime was
     // derived from the services assigned at the time it was saved and can be
     // stale when a longer service is added later.
-    if (timeToMinutes(hours.startTime) + durationMinutes >= 24 * 60) continue;
-
-    const range = {
-      startTime: hours.startTime,
-      endTime: addMinutes(hours.startTime, durationMinutes),
-    };
+    const boundary = orderedPeriods[index + 1]?.startTime ?? hours.endTime;
+    const windowEnd = timeToMinutes(boundary);
+    const start = timeToMinutes(hours.startTime);
     const breakRange = hours.breakStart && hours.breakEnd ? { startTime: hours.breakStart, endTime: hours.breakEnd } : null;
 
-    if (breakRange && rangesOverlap(range, breakRange)) continue;
-    if (unavailable.some((item) => rangesOverlap(range, item))) continue;
-    slots.push(hours.startTime);
+    for (let minute = start; minute + durationMinutes <= windowEnd && minute + durationMinutes < 24 * 60; minute += 30) {
+      const startTime = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+      const range = { startTime, endTime: addMinutes(startTime, durationMinutes) };
+      if (breakRange && rangesOverlap(range, breakRange)) continue;
+      if (unavailable.some((item) => rangesOverlap(range, item))) continue;
+      slots.push(startTime);
+    }
   }
 
   return [...new Set(slots)].sort();

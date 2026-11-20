@@ -8,7 +8,7 @@ import { formatWhatsapp, normalizeWhatsapp } from "../../lib/masks";
 import { whatsappHref } from "../../lib/public-links";
 import { PublicBrand, usePublicSettings } from "../public-settings";
 import CalendarMonths from "../calendar-months";
-import { todayInFortaleza } from "../../lib/scheduling";
+import { formatDurationInHours, todayInFortaleza } from "../../lib/scheduling";
 
 type Service = {
   id: string;
@@ -105,10 +105,7 @@ function dateLabel(value: string) {
     .replace(".", "");
 }
 function durationLabel(minutes: number) {
-  if (minutes < 60) return `${minutes} min`;
-  return minutes % 60 === 0
-    ? `${minutes / 60}h`
-    : `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+  return formatDurationInHours(minutes);
 }
 function priceLabel(service: Service) {
   if (service.priceCents === null) return "Sob consulta";
