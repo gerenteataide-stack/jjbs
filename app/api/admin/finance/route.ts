@@ -1,4 +1,4 @@
-import { asc, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import {
   appointmentServices,
