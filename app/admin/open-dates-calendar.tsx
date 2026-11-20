@@ -147,6 +147,9 @@ export default function OpenDatesCalendar({
   }).format(first);
   const selectedOverride = dates.find((item) => item.date === selectedDate);
   const selectedIsOpen = Boolean(selectedOverride?.serviceIds.length);
+  const allServicesSelected =
+    services.length > 0 &&
+    services.every((service) => selectedServiceIds.includes(service.id));
   const selectedLabel = selectedDate
     ? new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
@@ -227,12 +230,16 @@ export default function OpenDatesCalendar({
               <div className="open-date-service-actions">
                 <button
                   type="button"
-                  onClick={() => setSelectedServiceIds(services.map((service) => service.id))}
+                  aria-pressed={allServicesSelected}
+                  onClick={() =>
+                    setSelectedServiceIds(
+                      allServicesSelected
+                        ? []
+                        : services.map((service) => service.id),
+                    )
+                  }
                 >
-                  Marcar todos
-                </button>
-                <button type="button" onClick={() => setSelectedServiceIds([])}>
-                  Desmarcar todos
+                  {allServicesSelected ? "Desmarcar todos" : "Marcar todos"}
                 </button>
               </div>
             ) : null}
