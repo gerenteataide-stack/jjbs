@@ -17,7 +17,7 @@ const getHighlights = cache(async function getHighlights() {
   try {
     const db = await getDb();
     const [serviceRows, workRows] = await Promise.all([
-      db.select({ id: services.id, name: services.name, description: services.description, duration: services.durationMinutes, price: services.priceCents, priceType: services.priceType })
+      db.select({ id: services.id, name: services.name, description: services.description, duration: services.durationMinutes })
         .from(services).leftJoin(serviceCategories, eq(serviceCategories.id, services.categoryId)).where(eq(services.active, true)).orderBy(asc(serviceCategories.displayOrder), asc(services.name)).limit(3),
       db.select({ id: portfolioItems.id, image: portfolioItems.mainImageUrl, category: portfolioItems.category, title: portfolioItems.title })
         .from(portfolioItems).where(and(eq(portfolioItems.published, true), eq(portfolioItems.featured, true))).orderBy(asc(portfolioItems.displayOrder)).limit(3),
@@ -57,7 +57,7 @@ async function HomeServices() {
   return (
     <section className="home-services home-section" aria-labelledby="services-title">
       <div className="home-section-top"><h2 id="services-title">O seu próximo cuidado.</h2><a className="home-link" href="/servicos">Todos os serviços ↗</a></div>
-      {serviceRows.length ? <div className="home-service-list">{serviceRows.map(service => <a href="/agendar" key={service.id} className="home-service"><h3>{service.name}</h3><p>{service.description}</p><div><span>{formatDurationInHours(service.duration)}</span><strong>{service.price === null ? "Sob consulta" : `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.price / 100)}`}</strong></div><span className="home-service-arrow" aria-hidden="true">↗</span></a>)}</div> : <div className="home-service-empty"><p>Uma mudança de visual ou um momento de cuidado? Conheça os serviços e escolha o atendimento para você.</p><a className="home-button" href="/servicos">Explorar serviços ↗</a></div>}
+      {serviceRows.length ? <div className="home-service-list">{serviceRows.map(service => <a href="/agendar" key={service.id} className="home-service"><h3>{service.name}</h3><p>{service.description}</p><div><span>{formatDurationInHours(service.duration)}</span><strong>Preço conforme o tamanho</strong></div><span className="home-service-arrow" aria-hidden="true">↗</span></a>)}</div> : <div className="home-service-empty"><p>Uma mudança de visual ou um momento de cuidado? Conheça os serviços e escolha o atendimento para você.</p><a className="home-button" href="/servicos">Explorar serviços ↗</a></div>}
     </section>
   );
 }

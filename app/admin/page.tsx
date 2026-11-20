@@ -17,6 +17,7 @@ import UsersManagement from "./users-management";
 import type { Permission } from "../../lib/permissions";
 import { formatWhatsapp } from "../../lib/masks";
 import { formatDurationInHours } from "../../lib/scheduling";
+import { hairSizes, priceForHairSize, type HairSize, type HairSizePrices } from "../../lib/hair-sizes";
 import { PublicBrand } from "../public-settings";
 import PushNotificationsControl from "../push-notifications-control";
 import OpenDatesCalendar from "./open-dates-calendar";
@@ -28,6 +29,7 @@ type Appointment = {
   serviceId: string | null;
   appointmentDate: string;
   startTime: string;
+  hairSize: HairSize | null;
   endTime: string;
   status: string;
   totalEstimatedCents: number | null;
@@ -52,6 +54,7 @@ type Service = {
   durationMinutes: number;
   priceType: string;
   priceCents: number | null;
+  sizePrices: HairSizePrices;
   active: boolean;
 };
 type Overview = {
@@ -75,7 +78,7 @@ type ServiceForm = {
   description: string;
   durationHours: string;
   priceType: string;
-  price: string;
+  sizePrices: Record<HairSize, string>;
   active: boolean;
 };
 type Professional = {
@@ -125,7 +128,7 @@ const emptyService: ServiceForm = {
   description: "",
   durationHours: "1",
   priceType: "fixed",
-  price: "",
+  sizePrices: { P: "", M: "", G: "", EX: "" },
   active: true,
 };
 const emptyProfessional: ProfessionalForm = {
@@ -251,6 +254,7 @@ export default function AdminPage() {
   const [editAppointmentDate, setEditAppointmentDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [editServiceId, setEditServiceId] = useState("");
+  const [editHairSize, setEditHairSize] = useState<HairSize | "">("");
   const [editDates, setEditDates] = useState<string[]>([]);
   const [editSlots, setEditSlots] = useState<string[]>([]);
   const [editDatesLoading, setEditDatesLoading] = useState(false);
@@ -261,6 +265,7 @@ export default function AdminPage() {
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [rescheduleServices, setRescheduleServices] = useState<Service[]>([]);
   const [rescheduleServiceId, setRescheduleServiceId] = useState("");
+  const [rescheduleHairSize, setRescheduleHairSize] = useState<HairSize>("P");
   const [rescheduleServicesLoading, setRescheduleServicesLoading] = useState(false);
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [hoursForm, setHoursForm] = useState<DayHours[]>(defaultHours());
@@ -415,13 +420,13 @@ export default function AdminPage() {
     setMessage(value);
     setError(isError);
   }
-  async function updateStatus(id: string, status: string, appointmentDate?: string, startTime?: string, serviceId?: string) {
+  async function updateStatus(id: string, status: string, appointmentDate?: string, startTime?: string, serviceId?: string, hairSize?: HairSize) {
     setSaving(true);
     try {
       await request("/api/admin/appointments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status, appointmentDate, startTime, serviceId }),
+        body: JSON.stringify({ id, status, appointmentDate, startTime, serviceId, hairSize }),
       });
       note(appointmentDate && startTime ? `Agendamento reagendado para ${appointmentDate.split("-").reverse().join("/")}, às ${startTime}${serviceId ? `, serviço: ${data?.services.find((service) => service.id === serviceId)?.name ?? "atualizado"}` : ""}.` : "Status atualizado.");
       if (appointmentDate && startTime) setReschedulingAppointment(null);
@@ -445,12 +450,18 @@ export default function AdminPage() {
     setEditAppointmentDate(appointment.appointmentDate);
     setEditStartTime(appointment.startTime);
     setEditServiceId(appointment.serviceId ?? "");
+    setEditHairSize(appointment.hairSize && hairSizes.includes(appointment.hairSize) ? appointment.hairSize : "");
   }
   async function saveAppointmentEdit(event: FormEvent<HTMLFormElement>, appointment: Appointment) {
     event.preventDefault();
     const scheduleChanged = editAppointmentDate !== appointment.appointmentDate ||
       editStartTime !== appointment.startTime ||
-      editServiceId !== (appointment.serviceId ?? "");
+      editServiceId !== (appointment.serviceId ?? "") ||
+      editHairSize !== (appointment.hairSize ?? "");
+    if (scheduleChanged && !editHairSize) {
+      note("Escolha o tamanho do cabelo para atualizar o serviço e o valor.", true);
+      return;
+    }
     if (scheduleChanged && (!editDates.includes(editAppointmentDate) || !editSlots.includes(editStartTime))) {
       note("Escolha uma data liberada e um horário disponível para este serviço.", true);
       return;
@@ -468,6 +479,7 @@ export default function AdminPage() {
           appointmentDate: editAppointmentDate,
           startTime: editStartTime,
           serviceId: editServiceId,
+          hairSize: editHairSize || undefined,
         }),
       });
       setEditingAppointment(null);
@@ -487,6 +499,7 @@ export default function AdminPage() {
     setRescheduleTime("");
     setRescheduleServices([]);
     setRescheduleServiceId("");
+    setRescheduleHairSize(appointment.hairSize && hairSizes.includes(appointment.hairSize) ? appointment.hairSize : "P");
     setRescheduleLoading(true);
     try {
       // Keep this calendar in sync with the homepage's public agenda.
@@ -560,8 +573,10 @@ export default function AdminPage() {
       description: service.description,
       durationHours: String(Math.round((service.durationMinutes / 60) * 100) / 100),
       priceType: service.priceType,
-      price:
-        service.priceCents === null ? "" : String(service.priceCents / 100),
+      sizePrices: Object.fromEntries(hairSizes.map((size) => {
+        const price = priceForHairSize(service.sizePrices, size, service.priceCents);
+        return [size, price === null ? "" : String(price / 100)];
+      })) as Record<HairSize, string>,
       active: service.active,
     });
     setTab("services");
@@ -570,10 +585,13 @@ export default function AdminPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      const priceCents =
+      const sizePrices = Object.fromEntries(hairSizes.map((size) => [
+        size,
         serviceForm.priceType === "consultation"
           ? null
-          : Math.round(Number(serviceForm.price.replace(",", ".")) * 100);
+          : Math.round(Number(serviceForm.sizePrices[size].replace(",", ".")) * 100),
+      ])) as Record<HairSize, number | null>;
+      const priceCents = sizePrices.P;
       await request("/api/admin/services", {
         method: serviceForm.id ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -585,6 +603,7 @@ export default function AdminPage() {
           durationMinutes: Math.round(Number(serviceForm.durationHours.replace(",", ".")) * 60),
           priceType: serviceForm.priceType,
           priceCents,
+          sizePrices,
           active: serviceForm.active,
         }),
       });
@@ -1004,6 +1023,7 @@ export default function AdminPage() {
                             <td data-label="Serviço">
                               {appointment.serviceName ??
                                 "Serviço não identificado"}
+                              {appointment.hairSize && <small>Tamanho {appointment.hairSize}</small>}
                             </td>
                             <td data-label="Valor">{money(appointment.totalEstimatedCents)}</td>
                             <td data-label="Status">
@@ -1041,8 +1061,9 @@ export default function AdminPage() {
                                     <label>WhatsApp<input autoComplete="tel" inputMode="tel" maxLength={20} required value={editClientPhone} onChange={(event) => setEditClientPhone(formatWhatsapp(event.target.value))} /></label>
                                     <label>Serviço<select required value={editServiceId} onChange={(event) => { setEditServiceId(event.target.value); setEditStartTime(""); }}>
                                       <option value="">Escolha um serviço</option>
-                                      {data?.services.filter((service) => service.active || service.id === appointment.serviceId).map((service) => <option key={service.id} value={service.id}>{service.name}{service.priceCents === null ? " · Sob consulta" : ` · ${money(service.priceCents)}`}</option>)}
+                                      {data?.services.filter((service) => service.active || service.id === appointment.serviceId).map((service) => <option key={service.id} value={service.id}>{service.name} · preço por tamanho</option>)}
                                     </select></label>
+                                    <label>Tamanho do cabelo<select value={editHairSize} onChange={(event) => setEditHairSize(event.target.value as HairSize | "")}>{!editHairSize && <option value="">Tamanho não registrado</option>}{hairSizes.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
                                     <div className="admin-appointment-edit-calendar">
                                       <strong>Escolha uma data liberada</strong>
                                       {editDatesLoading ? <p>Carregando datas configuradas…</p> : editDates.length ? <CalendarMonths days={editDates} today={data?.today ?? ""} selectedDate={editAppointmentDate} onSelectDate={(date) => { setEditAppointmentDate(date); setEditStartTime(""); }} /> : <p>Não há datas futuras liberadas para este serviço e profissional.</p>}
@@ -1052,7 +1073,7 @@ export default function AdminPage() {
                                       {editSlotsLoading ? <p>Consultando horários…</p> : editAppointmentDate && editDates.includes(editAppointmentDate) ? editSlots.length ? <div className="admin-reschedule-times">{editSlots.map((slot) => <button className={`booking-time-option ${slot === editStartTime ? "selected" : ""}`} type="button" key={slot} aria-pressed={slot === editStartTime} onClick={() => setEditStartTime(slot)}>{slot}</button>)}</div> : <p>Não há horários livres nessa data.</p> : <p>Selecione uma data marcada em amarelo.</p>}
                                     </div>
                                     <p>As datas amarelas e os horários seguem as liberações da administração para esta profissional e serviço.</p>
-                                    <button className="admin-reschedule-confirm" type="submit" disabled={saving || !editServiceId || (Boolean(editingAppointment && (editAppointmentDate !== appointment.appointmentDate || editStartTime !== appointment.startTime || editServiceId !== (appointment.serviceId ?? ""))) && (editDatesLoading || editSlotsLoading || !editDates.includes(editAppointmentDate) || !editSlots.includes(editStartTime)))}>{saving ? "Salvando…" : "Salvar alterações"}</button>
+                                    <button className="admin-reschedule-confirm" type="submit" disabled={saving || !editServiceId || (Boolean(editingAppointment && (editAppointmentDate !== appointment.appointmentDate || editStartTime !== appointment.startTime || editServiceId !== (appointment.serviceId ?? "") || editHairSize !== (appointment.hairSize ?? ""))) && (!editHairSize || editDatesLoading || editSlotsLoading || !editDates.includes(editAppointmentDate) || !editSlots.includes(editStartTime)))}>{saving ? "Salvando…" : "Salvar alterações"}</button>
                                   </form>
                                 </section>
                               </td>
@@ -1070,6 +1091,7 @@ export default function AdminPage() {
                                     <CalendarMonths days={rescheduleDates} today={data?.today ?? ""} selectedDate={rescheduleDate} onSelectDate={(date) => void loadRescheduleSlots(appointment, date)} />
                                   ) : <p>Não há dias disponíveis para reagendamento.</p>}
                                   {rescheduleLoading && rescheduleDate && <p>Consultando horários…</p>}
+                                  <label>Tamanho do cabelo<select required value={rescheduleHairSize} onChange={(event) => setRescheduleHairSize(event.target.value as HairSize)}>{hairSizes.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
                                   {rescheduleDate && !rescheduleLoading && <div className="admin-reschedule-times" aria-label="Horários disponíveis">
                                     {rescheduleSlots.length ? rescheduleSlots.map((slot) => <button className={`booking-time-option ${slot === rescheduleTime ? "selected" : ""}`} type="button" key={slot} onClick={() => void loadRescheduleServices(appointment, rescheduleDate, slot)}>{slot}</button>) : <p>Não há horários livres para esta profissional nesse dia.</p>}
                                   </div>}
@@ -1077,10 +1099,10 @@ export default function AdminPage() {
                                     <h4>Serviços disponíveis às {rescheduleTime}</h4>
                                     {rescheduleServicesLoading ? <p>Consultando serviços para este horário…</p> : rescheduleServices.length ? <div className="booking-service-grid">
                                       {rescheduleServices.map((service) => <button className={`booking-service-option ${service.id === rescheduleServiceId ? "selected" : ""}`} type="button" key={service.id} aria-pressed={service.id === rescheduleServiceId} onClick={() => setRescheduleServiceId(service.id)}>
-                                        <small>{service.categoryName ?? "Serviço"}</small><strong>{service.name}</strong><span>{formatDurationInHours(service.durationMinutes)} · {service.priceCents === null ? "Sob consulta" : money(service.priceCents)}</span>
+                                        <small>{service.categoryName ?? "Serviço"}</small><strong>{service.name}</strong><span>{formatDurationInHours(service.durationMinutes)} · {service.priceType === "consultation" ? "Sob consulta" : `${rescheduleHairSize}: ${money(priceForHairSize(service.sizePrices, rescheduleHairSize, service.priceCents))}`}</span>
                                       </button>)}
                                     </div> : <p>Nenhum serviço disponível para esta profissional nesse horário.</p>}
-                                    <button className="admin-reschedule-confirm" type="button" disabled={saving || rescheduleServicesLoading || !rescheduleServiceId} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, rescheduleTime, rescheduleServiceId)}>Confirmar reagendamento</button>
+                                    <button className="admin-reschedule-confirm" type="button" disabled={saving || rescheduleServicesLoading || !rescheduleServiceId || !rescheduleHairSize} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, rescheduleTime, rescheduleServiceId, rescheduleHairSize)}>Confirmar reagendamento</button>
                                   </div>}
                                 </section>
                               </td>
@@ -1462,10 +1484,6 @@ export default function AdminPage() {
                             setServiceForm((current) => ({
                               ...current,
                               priceType: event.target.value,
-                              price:
-                                event.target.value === "consultation"
-                                  ? ""
-                                  : current.price,
                             }))
                           }
                         >
@@ -1476,22 +1494,27 @@ export default function AdminPage() {
                       </label>
                     </div>
                     {serviceForm.priceType !== "consultation" && (
-                      <label>
-                        Valor (R$)
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={serviceForm.price}
-                          onChange={(event) =>
-                            setServiceForm((current) => ({
-                              ...current,
-                              price: event.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </label>
+                      <fieldset className="admin-service-checks">
+                        <legend>Preço por tamanho (R$)</legend>
+                        <div className="admin-form-grid">
+                          {hairSizes.map((size) => (
+                            <label key={size}>
+                              Tamanho {size}
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={serviceForm.sizePrices[size]}
+                                onChange={(event) => setServiceForm((current) => ({
+                                  ...current,
+                                  sizePrices: { ...current.sizePrices, [size]: event.target.value },
+                                }))}
+                                required
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
                     )}
                     <label className="admin-toggle">
                       <input
@@ -1536,10 +1559,9 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <strong>
-                            {service.priceType === "starting_at"
-                              ? "A partir de "
-                              : ""}
-                            {money(service.priceCents)}
+                            {service.priceType === "consultation"
+                              ? "Sob consulta em todos os tamanhos"
+                              : hairSizes.map((size) => `${size}: ${money(priceForHairSize(service.sizePrices, size, service.priceCents))}`).join(" · ")}
                           </strong>
                           <small>
                             {formatDurationInHours(service.durationMinutes)} ·{" "}

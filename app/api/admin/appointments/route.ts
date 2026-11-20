@@ -5,6 +5,7 @@ import { requireAdmin } from "../../../../lib/admin";
 import { normalizeWhatsapp } from "../../../../lib/masks";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
 import { addMinutes, buildConfiguredStartSlots, isClockTime, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
+import { isHairSize, priceForHairSize } from "../../../../lib/hair-sizes";
 
 const validStatuses = new Set(["pending_confirmation", "confirmed", "in_service", "completed", "cancelled_by_client", "cancelled_by_salon", "no_show", "rescheduled"]);
 
@@ -28,6 +29,7 @@ export async function PATCH(request: Request) {
       professionalId: appointments.professionalId,
       serviceId: appointmentServices.serviceId,
       status: appointments.status,
+      hairSize: appointments.hairSize,
       appointmentDate: appointments.appointmentDate,
       startTime: appointments.startTime,
       endTime: appointments.endTime,
@@ -44,17 +46,20 @@ export async function PATCH(request: Request) {
     const nextStatus = String(body.status);
     if ((body.appointmentDate !== undefined && typeof body.appointmentDate !== "string") ||
       (body.startTime !== undefined && typeof body.startTime !== "string") ||
-      (body.serviceId !== undefined && typeof body.serviceId !== "string")) {
+      (body.serviceId !== undefined && typeof body.serviceId !== "string") ||
+      (body.hairSize !== undefined && !isHairSize(body.hairSize))) {
       return Response.json({ message: "Escolha um serviço válido para o reagendamento." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
     const nextDate = typeof body.appointmentDate === "string" ? body.appointmentDate.trim() : existing.appointmentDate;
     const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : existing.startTime;
     const nextServiceId = typeof body.serviceId === "string" ? body.serviceId.trim() : existing.serviceId ?? "";
-    const scheduleRequested = body.appointmentDate !== undefined || body.startTime !== undefined || body.serviceId !== undefined;
+    const nextHairSize = isHairSize(body.hairSize) ? body.hairSize : isHairSize(existing.hairSize) ? existing.hairSize : null;
+    const scheduleRequested = body.appointmentDate !== undefined || body.startTime !== undefined || body.serviceId !== undefined || body.hairSize !== undefined;
     const scheduleChanged = scheduleRequested && (
       nextDate !== existing.appointmentDate ||
       nextStartTime !== existing.startTime ||
-      nextServiceId !== (existing.serviceId ?? "")
+      nextServiceId !== (existing.serviceId ?? "") ||
+      nextHairSize !== existing.hairSize
     );
     const clientName = body.clientName === undefined ? null : typeof body.clientName === "string" ? body.clientName.trim() : "";
     const clientPhone = body.clientPhone === undefined ? null : normalizeWhatsapp(body.clientPhone);
@@ -63,9 +68,12 @@ export async function PATCH(request: Request) {
       return Response.json({ message: "Informe um nome válido e um WhatsApp com DDD." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
     const serviceChanged = nextServiceId !== (existing.serviceId ?? "");
+    const sizeChanged = nextHairSize !== existing.hairSize;
+    const pricingChanged = serviceChanged || sizeChanged;
     let nextService: { id: string; durationMinutes: number; priceCents: number | null } | null = null;
     let nextEndTime = existing.endTime;
     if (scheduleChanged) {
+      if (!nextHairSize) return Response.json({ message: "Escolha o tamanho do cabelo para atualizar o agendamento." }, { status: 400, headers: { "Cache-Control": "no-store" } });
       const professionalId = existing.professionalId;
       if (!professionalId) {
         return Response.json({ message: "Este agendamento não tem uma profissional associada e não pode ser reagendado." }, { status: 409, headers: { "Cache-Control": "no-store" } });
@@ -73,13 +81,13 @@ export async function PATCH(request: Request) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime) || !nextServiceId) {
         return Response.json({ message: "Escolha uma nova data e um horário válidos." }, { status: 400, headers: { "Cache-Control": "no-store" } });
       }
-      if (serviceChanged) {
-        const [service] = await db.select({ id: services.id, durationMinutes: services.durationMinutes, priceCents: services.priceCents }).from(services)
+      if (pricingChanged) {
+        const [service] = await db.select({ id: services.id, durationMinutes: services.durationMinutes, priceCents: services.priceCents, sizePrices: services.sizePrices }).from(services)
           .innerJoin(professionalServices, eq(professionalServices.serviceId, services.id))
           .where(and(eq(services.id, nextServiceId), eq(services.active, true), eq(professionalServices.professionalId, professionalId)))
           .limit(1);
         if (!service) return Response.json({ message: "Este serviço não está ativo para a profissional escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
-        nextService = service;
+        nextService = { ...service, priceCents: priceForHairSize(service.sizePrices, nextHairSize, service.priceCents) };
       }
       const duration = nextService?.durationMinutes ?? timeToMinutes(existing.endTime) - timeToMinutes(existing.startTime);
       nextEndTime = addMinutes(nextStartTime, duration);
@@ -115,6 +123,7 @@ export async function PATCH(request: Request) {
         appointmentDate: nextDate,
         startTime: nextStartTime,
         endTime: nextEndTime,
+        hairSize: nextHairSize,
         ...(nextService ? { totalEstimatedCents: nextService.priceCents, promotionId: null, couponCode: null, discountCents: 0 } : {}),
         updatedAt: new Date(),
       } : { status: nextStatus, updatedAt: new Date() })
@@ -129,12 +138,12 @@ export async function PATCH(request: Request) {
           updatedAt: new Date(),
         }).where(eq(clients.id, existing.clientId)),
       ] : []),
-      ...(serviceChanged && nextService ? [
+      ...(pricingChanged && nextService ? [
         db.delete(appointmentServices).where(eq(appointmentServices.appointmentId, existing.id)),
         db.insert(appointmentServices).values({
           id: crypto.randomUUID(),
           appointmentId: existing.id,
-          serviceId: nextService.id,
+          serviceId: nextServiceId,
           priceCents: nextService.priceCents,
           durationMinutes: nextService.durationMinutes,
         }),

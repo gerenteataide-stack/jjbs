@@ -24,6 +24,7 @@ type AccountAppointment = {
   endTime: string;
   status: string;
   totalEstimatedCents: number | null;
+  hairSize: string | null;
   serviceId: string | null;
   serviceName: string | null;
   professionalId: string | null;
@@ -459,6 +460,7 @@ export default function MyAccountPage() {
                         <strong>
                           {appointment.serviceName ?? "Atendimento no studio"}
                         </strong>
+                        {appointment.hairSize && <span>Tamanho {appointment.hairSize}</span>}
                         <span>
                           {dateLabel(appointment.appointmentDate)} ·{" "}
                           {appointment.startTime}
@@ -473,7 +475,7 @@ export default function MyAccountPage() {
                         <div className="account-appointment-actions">
                           {appointment.canReschedule && <a
                             className="text-button"
-                            href={`/agendar?reschedule=${encodeURIComponent(appointment.id)}&service=${encodeURIComponent(appointment.serviceId ?? "")}&professional=${encodeURIComponent(appointment.professionalId ?? "")}`}
+                            href={`/agendar?reschedule=${encodeURIComponent(appointment.id)}&service=${encodeURIComponent(appointment.serviceId ?? "")}&professional=${encodeURIComponent(appointment.professionalId ?? "")}&hairSize=${encodeURIComponent(appointment.hairSize ?? "")}`}
                           >
                             Reagendar
                           </a>}
@@ -530,6 +532,7 @@ export default function MyAccountPage() {
                         <strong>
                           {appointment.serviceName ?? "Atendimento no studio"}
                         </strong>
+                        {appointment.hairSize && <span>Tamanho {appointment.hairSize}</span>}
                         <span>
                           {dateLabel(appointment.appointmentDate)} ·{" "}
                           {appointment.startTime}

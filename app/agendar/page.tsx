@@ -9,6 +9,7 @@ import { whatsappHref } from "../../lib/public-links";
 import { PublicBrand, usePublicSettings } from "../public-settings";
 import CalendarMonths from "../calendar-months";
 import { formatDurationInHours, todayInFortaleza } from "../../lib/scheduling";
+import { hairSizes, isHairSize, priceForHairSize, type HairSize, type HairSizePrices } from "../../lib/hair-sizes";
 
 type Service = {
   id: string;
@@ -18,6 +19,7 @@ type Service = {
   durationMinutes: number;
   priceCents: number | null;
   priceType: string;
+  sizePrices?: HairSizePrices;
 };
 type Professional = { id: string; name: string; title: string | null };
 type ClientData = { name: string; phone: string; email: string; notes: string };
@@ -86,6 +88,7 @@ const fallbackProfessional: Professional = {
 const steps = [
   "Data",
   "Horário",
+  "Tamanho",
   "Serviço",
   "Profissional",
   "Seus dados",
@@ -107,9 +110,10 @@ function dateLabel(value: string) {
 function durationLabel(minutes: number) {
   return formatDurationInHours(minutes);
 }
-function priceLabel(service: Service) {
-  if (service.priceCents === null) return "Sob consulta";
-  return `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(service.priceCents / 100)}`;
+function priceLabel(service: Service, size: HairSize) {
+  const priceCents = priceForHairSize(service.sizePrices, size, service.priceCents);
+  if (priceCents === null) return "Sob consulta";
+  return `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(priceCents / 100)}`;
 }
 export default function BookingPage() {
   const settings = usePublicSettings();
@@ -129,6 +133,7 @@ export default function BookingPage() {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [step, setStep] = useState(1);
+  const [hairSize, setHairSize] = useState<HairSize | "">("");
   const [serviceId, setServiceId] = useState("");
   const [professionalId, setProfessionalId] = useState(fallbackProfessional.id);
   const [date, setDate] = useState("");
@@ -168,11 +173,12 @@ export default function BookingPage() {
   function chooseDate(value: string) {
     if (value !== date) {
       setTime("");
+      setHairSize("");
+      setServiceId("");
       setAvailableServiceIds([]);
       setServiceIdsBySlot({});
       setProfessionals([]);
       if (date) {
-        setServiceId("");
         setProfessionalId("");
         setCouponCode("");
         setAppliedCoupon(null);
@@ -188,9 +194,11 @@ export default function BookingPage() {
     const search = new URLSearchParams(window.location.search);
     const requestedServiceId = search.get("service")?.trim() ?? "";
     const requestedProfessionalId = search.get("professional")?.trim() ?? "";
+    const requestedHairSize = search.get("hairSize");
     const requestedDate = search.get("date")?.trim() ?? "";
     setRescheduleId(search.get("reschedule")?.trim() ?? "");
     if (requestedProfessionalId) setProfessionalId(requestedProfessionalId);
+    if (isHairSize(requestedHairSize)) setHairSize(requestedHairSize);
 
     void fetch("/api/booking-dates", { cache: "no-store" })
       .then(async (response) => {
@@ -280,7 +288,7 @@ export default function BookingPage() {
 
   useEffect(() => {
     let active = true;
-    if (!date || (step !== 2 && step !== 4)) {
+    if (!date || (step !== 2 && step !== 5)) {
       setAvailabilityNote("");
       setAvailabilityLoading(false);
       return () => {
@@ -293,7 +301,7 @@ export default function BookingPage() {
     setAvailabilityLoading(true);
     const queryParams = new URLSearchParams({ date });
     const choosingDateAndTime = step === 2;
-    if (step === 4) {
+    if (step === 5) {
       queryParams.set("serviceId", serviceId);
       queryParams.set("time", time);
       if (professionalId) queryParams.set("professionalId", professionalId);
@@ -374,7 +382,7 @@ export default function BookingPage() {
           );
         } else {
           setAvailabilityNote("");
-          if (step === 4) setStep(5);
+          if (step === 5) setStep(6);
         }
       })
       .catch(() => {
@@ -403,7 +411,7 @@ export default function BookingPage() {
       const response = await fetch("/api/promotions/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ couponCode: normalized, serviceId }),
+        body: JSON.stringify({ couponCode: normalized, serviceId, hairSize }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok)
@@ -426,11 +434,11 @@ export default function BookingPage() {
   }
   function goNext() {
     setError("");
-    if (step === 5 && !client.name.trim())
+    if (step === 6 && !client.name.trim())
       return setError("Informe seu nome para continuar.");
-    if (step === 5 && !normalizeWhatsapp(client.phone))
+    if (step === 6 && !normalizeWhatsapp(client.phone))
       return setError("Informe um WhatsApp válido para continuar.");
-    if (step === 6 && couponCode.trim() && !appliedCoupon)
+    if (step === 7 && couponCode.trim() && !appliedCoupon)
       return setError(
         "Clique em aplicar para validar o cupom ou apague o código para continuar sem cupom.",
       );
@@ -454,6 +462,7 @@ export default function BookingPage() {
           professionalId,
           appointmentDate: date,
           startTime: time,
+          hairSize,
           client,
           couponCode: appliedCoupon?.couponCode,
           rescheduleId: rescheduleId || undefined,
@@ -548,7 +557,7 @@ export default function BookingPage() {
             <br />
             <em>o seu horário.</em>
           </h1>
-          <p>Escolha a data, o horário, o serviço e a profissional. Cada escolha leva à próxima etapa.</p>
+          <p>Escolha a data, o horário e o tamanho do cabelo para ver os preços dos serviços antes de reservar.</p>
           <div className="booking-steps" aria-label="Etapas do agendamento">
             {steps.map((label, index) => (
               <div
@@ -625,9 +634,45 @@ export default function BookingPage() {
             )}
             {step === 3 && (
               <div>
+                <h2 id="booking-panel-title">Qual é o tamanho do seu cabelo?</h2>
+                <p className="booking-helper">
+                  Data e início: <strong>{selectedDate}, às {time}</strong>. Escolha o tamanho para ver os valores dos serviços.
+                </p>
+                <fieldset className="booking-fieldset">
+                  <legend>Tamanho do cabelo</legend>
+                  <div className="booking-date-grid">
+                    {hairSizes.map((size) => (
+                      <button
+                        className={`booking-date-option ${hairSize === size ? "selected" : ""}`}
+                        type="button"
+                        key={size}
+                        aria-pressed={hairSize === size}
+                        onClick={() => {
+                          if (hairSize && hairSize !== size) {
+                            setServiceId("");
+                            setCouponCode("");
+                            setAppliedCoupon(null);
+                            setProfessionals([]);
+                            setProfessionalId("");
+                          }
+                          setHairSize(size);
+                          setError("");
+                          setStep(4);
+                        }}
+                      >
+                        <strong>{size}</strong>
+                        <small>{size === "P" ? "Pequeno" : size === "M" ? "Médio" : size === "G" ? "Grande" : "Extra grande"}</small>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+            )}
+            {step === 4 && hairSize && (
+              <div>
                 <h2 id="booking-panel-title">Agora escolha seu serviço</h2>
                 <p className="booking-helper">
-                  Início selecionado: <strong>{selectedDate}, às {time}</strong>. Mostramos apenas serviços liberados para esta data.
+                  {hairSize} selecionado · {selectedDate}, às {time}. Os preços abaixo correspondem ao tamanho escolhido.
                 </p>
                 {servicesLoading ? <p className="booking-helper">Carregando os serviços liberados para esta data…</p> : servicesError ? <p className="booking-helper" role="status">{servicesError}</p> : dateServices.length ? <div className="booking-service-grid">
                   {dateServices.map((service) => (
@@ -645,7 +690,7 @@ export default function BookingPage() {
                           setAppliedCoupon(null);
                         }
                         setError("");
-                        setStep(4);
+                        setStep(5);
                       }}
                     >
                       <span className="booking-option-check" aria-hidden="true">
@@ -655,14 +700,14 @@ export default function BookingPage() {
                       <strong>{service.name}</strong>
                       <span>
                         {durationLabel(service.durationMinutes)} ·{" "}
-                        {priceLabel(service)}
+                        {priceLabel(service, hairSize)}
                       </span>
                     </button>
                   ))}
                 </div> : <p className="booking-helper" role="status">Nenhum serviço está disponível nesta data. Volte e escolha outra data.</p>}
               </div>
             )}
-            {step === 4 && (
+            {step === 5 && (
               <div>
                 <h2 id="booking-panel-title">Escolha a profissional</h2>
                 <p className="booking-helper">
@@ -702,7 +747,7 @@ export default function BookingPage() {
                 )}
               </div>
             )}
-            {step === 5 && (
+            {step === 6 && (
               <div>
                 <h2 id="booking-panel-title">Como podemos falar com você?</h2>
                 <p className="booking-helper">
@@ -765,7 +810,7 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            {step === 6 && (
+            {step === 7 && (
               <div>
                 <h2 id="booking-panel-title">Você tem um cupom?</h2>
                 <p className="booking-helper">
@@ -794,7 +839,7 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            {step === 7 && (
+            {step === 8 && (
               <div>
                 <h2 id="booking-panel-title">Está tudo certo?</h2>
                 <p className="booking-helper">
@@ -806,9 +851,10 @@ export default function BookingPage() {
                     <strong>{selectedService.name}</strong>
                     <small>
                       {durationLabel(selectedService.durationMinutes)} ·{" "}
-                      {priceLabel(selectedService)}
+                      {hairSize ? priceLabel(selectedService, hairSize) : "Escolha o tamanho"}
                     </small>
                   </div>
+                  <div><span>Tamanho</span><strong>{hairSize || "Não escolhido"}</strong></div>
                   <div>
                     <span>Data e horário</span>
                     <strong>{selectedDate}</strong>
@@ -858,7 +904,7 @@ export default function BookingPage() {
                   Ver serviços
                 </a>
               )}
-              {step >= 5 && step < steps.length ? (
+              {step >= 6 && step < steps.length ? (
                 <button
                   className="button button-gold"
                   type="button"
@@ -890,7 +936,7 @@ export default function BookingPage() {
                   <strong>{selectedDate}, {time}</strong>
                 </div>
               )}
-              {serviceId && (
+              {serviceId && hairSize && (
                 <>
                   <div className="booking-aside-detail">
                     <span>Profissional</span>
@@ -902,7 +948,7 @@ export default function BookingPage() {
                   </div>
                   <div className="booking-aside-detail">
                     <span>Investimento</span>
-                    <strong>{priceLabel(selectedService)}</strong>
+                    <strong>{priceLabel(selectedService, hairSize)}</strong>
                   </div>
                 </>
               )}

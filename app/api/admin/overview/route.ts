@@ -28,6 +28,7 @@ export async function GET(request: Request) {
         endTime: appointments.endTime,
         status: appointments.status,
         totalEstimatedCents: appointments.totalEstimatedCents,
+        hairSize: appointments.hairSize,
         clientName: clients.name,
         clientPhone: clients.phone,
         serviceName: services.name,
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
         durationMinutes: services.durationMinutes,
         priceType: services.priceType,
         priceCents: services.priceCents,
+        sizePrices: services.sizePrices,
         active: services.active,
       }).from(services)
         .leftJoin(serviceCategories, eq(serviceCategories.id, services.categoryId))
