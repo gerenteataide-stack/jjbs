@@ -138,6 +138,7 @@ export default function BookingPage() {
   const [professionalId, setProfessionalId] = useState(fallbackProfessional.id);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const autoAdvanceToClientData = useRef(false);
   const [client, setClient] = useState<ClientData>({
     name: "",
     phone: "",
@@ -382,7 +383,10 @@ export default function BookingPage() {
           );
         } else {
           setAvailabilityNote("");
-          if (step === 5) setStep(6);
+          if (step === 5 && autoAdvanceToClientData.current) {
+            autoAdvanceToClientData.current = false;
+            setStep(6);
+          }
         }
       })
       .catch(() => {
@@ -446,6 +450,7 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
+    autoAdvanceToClientData.current = false;
     setStep((current) => Math.max(1, current - 1));
   }
   async function submitBooking() {
@@ -646,6 +651,16 @@ export default function BookingPage() {
                         src="/hair-length-guide.png"
                         alt="Referência visual do comprimento do cabelo, igual à página inicial."
                       />
+                      <figcaption aria-label="Comprimentos: P, M, G e EX">
+                        <span className="home-hair-guide home-hair-guide-p" aria-hidden="true" />
+                        <span className="home-hair-size home-hair-size-p" aria-hidden="true">P</span>
+                        <span className="home-hair-guide home-hair-guide-m" aria-hidden="true" />
+                        <span className="home-hair-size home-hair-size-m" aria-hidden="true">M</span>
+                        <span className="home-hair-guide home-hair-guide-g" aria-hidden="true" />
+                        <span className="home-hair-size home-hair-size-g" aria-hidden="true">G</span>
+                        <span className="home-hair-guide home-hair-guide-ex" aria-hidden="true" />
+                        <span className="home-hair-size home-hair-size-ex" aria-hidden="true">EX</span>
+                      </figcaption>
                     </figure>
                     <div className="booking-hair-size-grid">
                       {hairSizes.map((size) => (
@@ -734,6 +749,7 @@ export default function BookingPage() {
                           key={professional.id}
                           aria-pressed={professional.id === professionalId}
                           onClick={() => {
+                            autoAdvanceToClientData.current = true;
                             setProfessionalId(professional.id);
                             setAvailabilityNote("Confirmando a disponibilidade do horário…");
                             setError("");
