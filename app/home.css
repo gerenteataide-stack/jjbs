@@ -67,9 +67,9 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .home-hair-guide{position:absolute;left:10%;right:10%;display:flex;align-items:center;gap:8px;color:#171715;font-size:clamp(18px,2vw,25px);font-weight:700;line-height:1;text-shadow:0 1px 2px #f1f0eb}
 .home-hair-guide>i{position:relative;display:block;height:2px;flex:1;background:#d4af37}
 .home-hair-guide>i::after{position:absolute;top:50%;width:9px;height:9px;border-top:2px solid #d4af37;border-right:2px solid #d4af37;content:""}
-.home-hair-guide-p{top:36%}.home-hair-guide-p>i::after,.home-hair-guide-g>i::after{right:0;transform:translateY(-50%) rotate(45deg)}
-.home-hair-guide-m{top:51%}.home-hair-guide-m>i::after,.home-hair-guide-ex>i::after{left:0;transform:translateY(-50%) rotate(-135deg)}
-.home-hair-guide-g{top:68%}.home-hair-guide-ex{top:85%}
+.home-hair-guide-p{top:54%}.home-hair-guide-p>i::after,.home-hair-guide-g>i::after{right:0;transform:translateY(-50%) rotate(45deg)}
+.home-hair-guide-m{top:65%}.home-hair-guide-m>i::after,.home-hair-guide-ex>i::after{left:0;transform:translateY(-50%) rotate(-135deg)}
+.home-hair-guide-g{top:75%}.home-hair-guide-ex{top:85%}
 @media(max-width:760px){.studio-home .home-hair-length{grid-template-columns:minmax(0,1fr);gap:26px;padding-top:56px;padding-bottom:56px}.studio-home .home-hair-length-copy h2{font-size:clamp(38px,10vw,54px);max-width:12ch;margin-bottom:16px}.home-hair-length-copy p{font-size:16px}.home-hair-length-visual{width:min(100%,420px)}.home-hair-guide{left:8%;right:8%;gap:5px;font-size:20px}.home-hair-guide>i{height:2px}}
 
 .booking-page{--home-accent:#d4af37;--home-paper:#f1f0eb}
