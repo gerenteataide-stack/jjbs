@@ -1,9 +1,10 @@
-import { and, eq, gt, inArray, lt, ne, notInArray } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { appointmentServices, appointments, blockedTimes, businessHours, clients, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
+import { normalizeWhatsapp } from "../../../../lib/masks";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
-import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, isClockTime, rangesOverlap, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
+import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, buildConfiguredStartSlots, isClockTime, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
 
 const validStatuses = new Set(["pending_confirmation", "confirmed", "in_service", "completed", "cancelled_by_client", "cancelled_by_salon", "no_show", "rescheduled"]);
 
@@ -25,6 +26,7 @@ export async function PATCH(request: Request) {
       id: appointments.id,
       clientId: appointments.clientId,
       professionalId: appointments.professionalId,
+      serviceId: appointmentServices.serviceId,
       status: appointments.status,
       appointmentDate: appointments.appointmentDate,
       startTime: appointments.startTime,
@@ -40,23 +42,38 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ message: "Agendamento não encontrado." }, { status: 404, headers: { "Cache-Control": "no-store" } });
 
     const nextStatus = String(body.status);
-    const nextDate = typeof body.appointmentDate === "string" ? body.appointmentDate.trim() : "";
-    const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : "";
-    if (body.serviceId !== undefined && typeof body.serviceId !== "string") {
+    if ((body.appointmentDate !== undefined && typeof body.appointmentDate !== "string") ||
+      (body.startTime !== undefined && typeof body.startTime !== "string") ||
+      (body.serviceId !== undefined && typeof body.serviceId !== "string")) {
       return Response.json({ message: "Escolha um serviço válido para o reagendamento." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
-    const nextServiceId = typeof body.serviceId === "string" ? body.serviceId.trim() : "";
+    const nextDate = typeof body.appointmentDate === "string" ? body.appointmentDate.trim() : existing.appointmentDate;
+    const nextStartTime = typeof body.startTime === "string" ? body.startTime.trim() : existing.startTime;
+    const nextServiceId = typeof body.serviceId === "string" ? body.serviceId.trim() : existing.serviceId ?? "";
+    const scheduleRequested = body.appointmentDate !== undefined || body.startTime !== undefined || body.serviceId !== undefined;
+    const scheduleChanged = scheduleRequested && (
+      nextDate !== existing.appointmentDate ||
+      nextStartTime !== existing.startTime ||
+      nextServiceId !== (existing.serviceId ?? "")
+    );
+    const clientName = body.clientName === undefined ? null : typeof body.clientName === "string" ? body.clientName.trim() : "";
+    const clientPhone = body.clientPhone === undefined ? null : normalizeWhatsapp(body.clientPhone);
+    if ((clientName !== null && (clientName.length < 2 || clientName.length > 120)) ||
+      (body.clientPhone !== undefined && !clientPhone)) {
+      return Response.json({ message: "Informe um nome válido e um WhatsApp com DDD." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    }
+    const serviceChanged = nextServiceId !== (existing.serviceId ?? "");
     let nextService: { id: string; durationMinutes: number; priceCents: number | null } | null = null;
     let nextEndTime = existing.endTime;
-    if (nextDate || nextStartTime) {
+    if (scheduleChanged) {
       const professionalId = existing.professionalId;
       if (!professionalId) {
         return Response.json({ message: "Este agendamento não tem uma profissional associada e não pode ser reagendado." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate < todayInFortaleza() || !isClockTime(nextStartTime) || !nextServiceId) {
         return Response.json({ message: "Escolha uma nova data e um horário válidos." }, { status: 400, headers: { "Cache-Control": "no-store" } });
       }
-      if (nextServiceId) {
+      if (serviceChanged) {
         const [service] = await db.select({ id: services.id, durationMinutes: services.durationMinutes, priceCents: services.priceCents }).from(services)
           .innerJoin(professionalServices, eq(professionalServices.serviceId, services.id))
           .where(and(eq(services.id, nextServiceId), eq(services.active, true), eq(professionalServices.professionalId, professionalId)))
@@ -70,7 +87,7 @@ export async function PATCH(request: Request) {
 
       const [dateOverride] = await db.select({ serviceIds: openScheduleDates.serviceIds }).from(openScheduleDates)
         .where(and(eq(openScheduleDates.professionalId, professionalId), eq(openScheduleDates.date, nextDate))).limit(1);
-      const linkedServices = nextServiceId
+      const linkedServices = serviceChanged
         ? [{ serviceId: nextServiceId }]
         : await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
           .where(eq(appointmentServices.appointmentId, existing.id));
@@ -87,23 +104,21 @@ export async function PATCH(request: Request) {
       }
       const periods = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd }).from(businessHours)
         .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
-      const insideWorkPeriod = periods.some((period) => nextStartTime === period.startTime && nextEndTime <= period.endTime
-        && !(period.breakStart && period.breakEnd && rangesOverlap({ startTime: nextStartTime, endTime: nextEndTime }, { startTime: period.breakStart, endTime: period.breakEnd })));
-      if (!insideWorkPeriod) return Response.json({ message: "Esse horário não está disponível no expediente da profissional." }, { status: 409, headers: { "Cache-Control": "no-store" } });
-      const [blocked] = await db.select({ id: blockedTimes.id }).from(blockedTimes).where(and(
-        eq(blockedTimes.professionalId, professionalId), eq(blockedTimes.blockDate, nextDate),
-        lt(blockedTimes.startTime, nextEndTime), gt(blockedTimes.endTime, nextStartTime),
-      )).limit(1);
-      if (blocked) return Response.json({ message: "Esse horário está bloqueado pelo studio." }, { status: 409, headers: { "Cache-Control": "no-store" } });
-      const [conflict] = await db.select({ id: appointments.id }).from(appointments).where(and(
-        eq(appointments.professionalId, professionalId), eq(appointments.appointmentDate, nextDate),
-        notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]),
-        lt(appointments.startTime, nextEndTime), gt(appointments.endTime, nextStartTime), ne(appointments.id, existing.id),
-      )).limit(1);
-      if (conflict) return Response.json({ message: "Esse horário acabou de ser ocupado. Escolha outro." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      const [blockedRows, appointmentRows] = await Promise.all([
+        db.select({ startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes).where(and(
+          eq(blockedTimes.professionalId, professionalId), eq(blockedTimes.blockDate, nextDate),
+        )),
+        db.select({ startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments).where(and(
+          eq(appointments.professionalId, professionalId), eq(appointments.appointmentDate, nextDate),
+          notInArray(appointments.status, ["cancelled_by_client", "cancelled_by_salon", "rescheduled"]),
+          ne(appointments.id, existing.id),
+        )),
+      ]);
+      const availableSlots = buildConfiguredStartSlots(periods, duration, [...blockedRows, ...appointmentRows]);
+      if (!availableSlots.includes(nextStartTime)) return Response.json({ message: "Esse horário não está disponível. Verifique o expediente, os bloqueios e outros agendamentos." }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
     const update = db.update(appointments)
-      .set(nextDate ? {
+      .set(scheduleChanged ? {
         appointmentDate: nextDate,
         startTime: nextStartTime,
         endTime: nextEndTime,
@@ -114,7 +129,14 @@ export async function PATCH(request: Request) {
       .returning({ id: appointments.id, status: appointments.status });
     const updateResults = await db.batch([
       update,
-      ...(nextService ? [
+      ...(clientName !== null || clientPhone ? [
+        db.update(clients).set({
+          ...(clientName !== null ? { name: clientName } : {}),
+          ...(clientPhone ? { phone: clientPhone, whatsapp: clientPhone } : {}),
+          updatedAt: new Date(),
+        }).where(eq(clients.id, existing.clientId)),
+      ] : []),
+      ...(serviceChanged && nextService ? [
         db.delete(appointmentServices).where(eq(appointmentServices.appointmentId, existing.id)),
         db.insert(appointmentServices).values({
           id: crypto.randomUUID(),

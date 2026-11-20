@@ -21,6 +21,12 @@ const validStatuses = new Set([
   "cancelled",
 ]);
 const receivedStatuses = new Set(["partially_paid", "paid"]);
+const excludedAppointmentStatuses = [
+  "cancelled",
+  "cancelled_by_client",
+  "cancelled_by_salon",
+  "rescheduled",
+];
 
 type PaymentInput = {
   id?: string;
@@ -158,7 +164,7 @@ export async function GET(request: Request) {
       .from(appointments)
       .innerJoin(clients, eq(clients.id, appointments.clientId))
       .leftJoin(professionals, eq(professionals.id, appointments.professionalId))
-      .where(notInArray(appointments.status, ["cancelled", "cancelled_by_client", "cancelled_by_salon", "rescheduled"]))
+      .where(notInArray(appointments.status, excludedAppointmentStatuses))
       .orderBy(desc(appointments.appointmentDate), desc(appointments.startTime))
       .limit(500);
     const appointmentIds = appointmentRows.map((row) => row.id);
@@ -332,12 +338,17 @@ export async function POST(request: Request) {
       );
     const db = await getDb();
     const [appointment] = await db
-      .select({ id: appointments.id })
+      .select({ id: appointments.id, status: appointments.status })
       .from(appointments)
       .where(eq(appointments.id, input.appointmentId))
       .limit(1);
     if (!appointment)
       return noStore({ message: "Agendamento não encontrado." }, 404);
+    if (excludedAppointmentStatuses.includes(appointment.status))
+      return noStore(
+        { message: "Não é possível lançar pagamento para um agendamento cancelado ou reagendado." },
+        409,
+      );
     if (input.paymentMethodId) {
       const [method] = await db
         .select({ id: paymentMethods.id })
@@ -416,6 +427,16 @@ export async function PATCH(request: Request) {
       .limit(1);
     if (!current)
       return noStore({ message: "Lançamento não encontrado." }, 404);
+    const [appointment] = await db
+      .select({ status: appointments.status })
+      .from(appointments)
+      .where(eq(appointments.id, current.appointmentId))
+      .limit(1);
+    if (!appointment || excludedAppointmentStatuses.includes(appointment.status))
+      return noStore(
+        { message: "Agendamentos cancelados ou reagendados não recebem lançamentos financeiros." },
+        409,
+      );
     const [updated] = await db.batch([
       db
         .update(payments)

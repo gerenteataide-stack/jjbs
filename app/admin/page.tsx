@@ -259,6 +259,12 @@ export default function AdminPage() {
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("");
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
   const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [editClientName, setEditClientName] = useState("");
+  const [editClientPhone, setEditClientPhone] = useState("");
+  const [editAppointmentDate, setEditAppointmentDate] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editServiceId, setEditServiceId] = useState("");
   const [rescheduleDates, setRescheduleDates] = useState<string[]>([]);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
@@ -390,7 +396,43 @@ export default function AdminPage() {
       setSaving(false);
     }
   }
+  function beginEditAppointment(appointment: Appointment) {
+    setReschedulingAppointment(null);
+    setEditingAppointment(appointment);
+    setEditClientName(appointment.clientName);
+    setEditClientPhone(appointment.clientPhone);
+    setEditAppointmentDate(appointment.appointmentDate);
+    setEditStartTime(appointment.startTime);
+    setEditServiceId(appointment.serviceId ?? "");
+  }
+  async function saveAppointmentEdit(event: FormEvent<HTMLFormElement>, appointment: Appointment) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await request("/api/admin/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: appointment.id,
+          status: appointment.status,
+          clientName: editClientName,
+          clientPhone: editClientPhone,
+          appointmentDate: editAppointmentDate,
+          startTime: editStartTime,
+          serviceId: editServiceId,
+        }),
+      });
+      setEditingAppointment(null);
+      note("Dados do agendamento atualizados.");
+      await load();
+    } catch (cause) {
+      note(cause instanceof Error ? cause.message : "Não foi possível atualizar os dados do agendamento.", true);
+    } finally {
+      setSaving(false);
+    }
+  }
   async function beginReschedule(appointment: Appointment) {
+    setEditingAppointment(null);
     setReschedulingAppointment(appointment);
     setRescheduleDate("");
     setRescheduleSlots([]);
@@ -939,6 +981,7 @@ export default function AdminPage() {
                             <td>
                               <strong>{appointment.clientName}</strong>
                               <small>{appointment.clientPhone}</small>
+                              <button className="text-button admin-appointment-edit-trigger" type="button" disabled={saving} onClick={() => beginEditAppointment(appointment)}>Editar agendamento</button>
                             </td>
                             <td>
                               {appointment.serviceName ??
@@ -967,6 +1010,30 @@ export default function AdminPage() {
                               </label>
                             </td>
                           </tr>
+                          {editingAppointment?.id === appointment.id && (
+                            <tr className="admin-reschedule-row">
+                              <td colSpan={5}>
+                                <section className="admin-reschedule-panel">
+                                  <div className="admin-reschedule-heading">
+                                    <div><span>Editar agendamento</span><h3>Atualize os dados do cliente e do atendimento</h3></div>
+                                    <button className="text-button" type="button" onClick={() => setEditingAppointment(null)}>Cancelar</button>
+                                  </div>
+                                  <form className="admin-appointment-edit-form" onSubmit={(event) => void saveAppointmentEdit(event, appointment)}>
+                                    <label>Nome do cliente<input autoComplete="name" maxLength={120} required value={editClientName} onChange={(event) => setEditClientName(event.target.value)} /></label>
+                                    <label>WhatsApp<input autoComplete="tel" inputMode="tel" maxLength={20} required value={editClientPhone} onChange={(event) => setEditClientPhone(formatWhatsapp(event.target.value))} /></label>
+                                    <label>Serviço<select required value={editServiceId} onChange={(event) => setEditServiceId(event.target.value)}>
+                                      <option value="">Escolha um serviço</option>
+                                      {data?.services.filter((service) => service.active || service.id === appointment.serviceId).map((service) => <option key={service.id} value={service.id}>{service.name}{service.priceCents === null ? " · Sob consulta" : ` · ${money(service.priceCents)}`}</option>)}
+                                    </select></label>
+                                    <label>Data<input type="date" min={data?.today} required value={editAppointmentDate} onChange={(event) => setEditAppointmentDate(event.target.value)} /></label>
+                                    <label>Horário de início<input type="time" required value={editStartTime} onChange={(event) => setEditStartTime(event.target.value)} /></label>
+                                    <p>O horário e o serviço serão conferidos com a agenda da profissional antes de salvar.</p>
+                                    <button className="admin-reschedule-confirm" type="submit" disabled={saving || !editServiceId}>{saving ? "Salvando…" : "Salvar alterações"}</button>
+                                  </form>
+                                </section>
+                              </td>
+                            </tr>
+                          )}
                           {reschedulingAppointment?.id === appointment.id && (
                             <tr className="admin-reschedule-row">
                               <td colSpan={5}>
