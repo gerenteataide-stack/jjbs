@@ -30,7 +30,9 @@ export async function getPublicSchedule() {
     ]);
     const openDatesByKey = new Map(openDates.map(row => [`${row.professionalId}:${row.date}`, row]));
     const now = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Fortaleza", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+    const datesAlreadyChosen = new Set(bookings.map((booking) => booking.date));
     return { days: dates.filter(date => {
+      if (datesAlreadyChosen.has(date)) return false;
       const professionalsForDate = [...new Set(hours
         .filter(period => period.weekday === weekdayForDate(date))
         .map(period => period.professionalId))];
