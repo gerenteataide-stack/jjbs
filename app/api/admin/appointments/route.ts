@@ -1,6 +1,6 @@
-import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { appointmentServices, appointments, businessHours, clients, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
+import { appointmentServices, appointments, auditLogs, businessHours, clients, loyaltyTransactions, notifications, openScheduleDates, professionalServices, services } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
 import { normalizeWhatsapp } from "../../../../lib/masks";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
@@ -178,6 +178,45 @@ export async function PATCH(request: Request) {
         body: message,
         url: "/minha-conta#notificacoes",
       });
+    }
+
+    if (nextStatus === "completed" && existing.status !== "completed") {
+      const [previousStamp] = await db.select({ id: loyaltyTransactions.id }).from(loyaltyTransactions)
+        .where(and(eq(loyaltyTransactions.appointmentId, existing.id), eq(loyaltyTransactions.kind, "service"))).limit(1);
+      const unlocked = !previousStamp && await db.execute(sql`
+        WITH earned AS (
+          INSERT INTO loyalty_transactions
+            (id, client_id, appointment_id, kind, points_delta, stamps_delta, referrals_delta, description, created_by)
+          VALUES
+            (${crypto.randomUUID()}, ${existing.clientId}, ${existing.id}, 'service', 0, 1, 0, ${`Carimbo pelo atendimento${existing.serviceName ? ` de ${existing.serviceName}` : ""} concluído`}, ${admin.id})
+          RETURNING client_id
+        ), updated_loyalty AS (
+          INSERT INTO loyalty_accounts (id, client_id, points, stamps, referrals)
+          SELECT ${crypto.randomUUID()}, client_id, 0, 1, 0 FROM earned
+          ON CONFLICT (client_id) DO UPDATE
+            SET stamps = loyalty_accounts.stamps + 1, updated_at = now()
+          RETURNING client_id, stamps
+        ), logged AS (
+          INSERT INTO audit_logs (id, user_id, action, entity, entity_id, metadata)
+          SELECT ${crypto.randomUUID()}, ${admin.id}, 'loyalty.service_completed', 'client', client_id,
+            ${JSON.stringify({ appointmentId: existing.id })}::jsonb
+          FROM updated_loyalty
+          RETURNING entity_id
+        )
+        SELECT stamps = 5 AS reward_unlocked FROM updated_loyalty
+      `).then((result) => Array.isArray(result) && result.some((row) =>
+        typeof row === "object" && row !== null && "reward_unlocked" in row && row.reward_unlocked === true,
+      ));
+      if (unlocked && existing.clientUserId) {
+        const title = "Sua hidratação grátis está liberada";
+        const message = "Você completou cinco atendimentos e ganhou uma hidratação gratuita. O studio registrará o resgate quando você usar o benefício.";
+        try {
+          await db.insert(notifications).values({ id: crypto.randomUUID(), userId: existing.clientUserId, appointmentId: existing.id, title, message, type: "promotion", channel: "in_app", status: "sent", sentAt: new Date(), createdBy: admin.id });
+          await sendAppointmentPush([existing.clientUserId], { title, body: message, url: "/minha-conta" });
+        } catch (error) {
+          console.error("[loyalty] reward notification failed", { message: error instanceof Error ? error.message : "Unknown loyalty notification error" });
+        }
+      }
     }
 
     if (nextStatus === "completed" && existing.status !== "completed" && existing.clientUserId) {

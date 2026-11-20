@@ -655,13 +655,23 @@ export default function MyAccountPage() {
             </article>
             <article className="account-card loyalty-account-card">
               <span className="account-card-label">Sua fidelidade</span>
+              <div className="loyalty-stamp-card" aria-label={`${Math.min(loyalty.account.stamps, 5)} de 5 carimbos`}>
+                {Array.from({ length: 5 }, (_, index) => (
+                  <span className={index < Math.min(loyalty.account.stamps, 5) ? "earned" : ""} key={index} aria-hidden="true">{index < Math.min(loyalty.account.stamps, 5) ? "✓" : index + 1}</span>
+                ))}
+              </div>
+              <p className="loyalty-reward-status">
+                {loyalty.account.stamps >= 5
+                  ? "Você ganhou uma hidratação totalmente grátis! O studio registra o resgate quando você usar."
+                  : `Faltam ${5 - Math.min(loyalty.account.stamps, 5)} atendimento${5 - Math.min(loyalty.account.stamps, 5) === 1 ? "" : "s"} concluído${5 - Math.min(loyalty.account.stamps, 5) === 1 ? "" : "s"} para ganhar uma hidratação grátis.`}
+              </p>
               <div className="loyalty-account-numbers">
                 <div>
                   <strong>{loyalty.account.points}</strong>
                   <small>pontos</small>
                 </div>
                 <div>
-                  <strong>{loyalty.account.stamps}</strong>
+                  <strong>{Math.min(loyalty.account.stamps, 5)}</strong>
                   <small>carimbos</small>
                 </div>
                 <div>
