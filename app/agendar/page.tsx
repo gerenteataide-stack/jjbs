@@ -10,6 +10,7 @@ import { PublicBrand, usePublicSettings } from "../public-settings";
 import CalendarMonths from "../calendar-months";
 import { formatDurationInHours, todayInFortaleza } from "../../lib/scheduling";
 import { hairSizes, isHairSize, priceForHairSize, type HairSize, type HairSizePrices } from "../../lib/hair-sizes";
+import { isInternalRole } from "../../lib/permissions";
 
 type Service = {
   id: string;
@@ -23,6 +24,7 @@ type Service = {
 };
 type Professional = { id: string; name: string; title: string | null };
 type ClientData = { name: string; phone: string; email: string; notes: string };
+type ExistingClient = { id: string; name: string; phone: string; whatsapp: string | null; email: string | null; notes: string | null };
 type AppliedCoupon = {
   id: string;
   title: string;
@@ -152,6 +154,10 @@ export default function BookingPage() {
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rescheduleId, setRescheduleId] = useState("");
+  const [ownerBooking, setOwnerBooking] = useState(false);
+  const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
+  const [selectedExistingClientId, setSelectedExistingClientId] = useState("");
+  const [existingClientsLoading, setExistingClientsLoading] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
     null,
@@ -234,13 +240,33 @@ export default function BookingPage() {
             name?: string;
             phone?: string | null;
             email?: string;
+            role?: string;
           };
-          setClient((current) => ({
-            ...current,
-            name: account.name ?? current.name,
-            phone: formatWhatsapp(account.phone ?? current.phone),
-            email: account.email ?? current.email,
-          }));
+          if (account.role === "client") {
+            setClient((current) => ({
+              ...current,
+              name: account.name ?? current.name,
+              phone: formatWhatsapp(account.phone ?? current.phone),
+              email: account.email ?? current.email,
+            }));
+          }
+          if (account.role && isInternalRole(account.role)) {
+            setOwnerBooking(true);
+            setClient({ name: "", phone: "", email: "", notes: "" });
+            setExistingClientsLoading(true);
+            void fetch("/api/admin/booking-clients", { cache: "no-store" })
+              .then(async (clientsResponse) => {
+                const clientsResult = await clientsResponse.json().catch(() => ({}));
+                if (!clientsResponse.ok || !Array.isArray(clientsResult.clients)) {
+                  throw new Error(typeof clientsResult.message === "string" ? clientsResult.message : "Não foi possível carregar os clientes cadastrados.");
+                }
+                if (active) setExistingClients(clientsResult.clients as ExistingClient[]);
+              })
+              .catch((cause: unknown) => {
+                if (active) setError(cause instanceof Error ? cause.message : "Não foi possível carregar os clientes cadastrados.");
+              })
+              .finally(() => { if (active) setExistingClientsLoading(false); });
+          }
         }
       })
       .catch(() => undefined);
@@ -404,6 +430,17 @@ export default function BookingPage() {
     setClient((current) => ({ ...current, [field]: value }));
     setError("");
   }
+  function selectExistingClient(clientId: string) {
+    setSelectedExistingClientId(clientId);
+    const selectedClient = existingClients.find((item) => item.id === clientId);
+    setClient(selectedClient ? {
+      name: selectedClient.name,
+      phone: formatWhatsapp(selectedClient.whatsapp ?? selectedClient.phone),
+      email: selectedClient.email ?? "",
+      notes: selectedClient.notes ?? "",
+    } : { name: "", phone: "", email: "", notes: "" });
+    setError("");
+  }
   async function applyCoupon() {
     const normalized = couponCode.trim().toUpperCase().replace(/\s+/g, "");
     if (!normalized)
@@ -469,6 +506,7 @@ export default function BookingPage() {
           startTime: time,
           hairSize,
           client,
+          clientId: selectedExistingClientId || undefined,
           couponCode: appliedCoupon?.couponCode,
           rescheduleId: rescheduleId || undefined,
         }),
@@ -777,6 +815,14 @@ export default function BookingPage() {
                 <p className="booking-helper">
                   Usaremos estes dados somente para confirmar seu atendimento.
                 </p>
+                {ownerBooking && !rescheduleId && <label className="booking-full-field booking-existing-client">
+                  Cliente já cadastrada
+                  <select value={selectedExistingClientId} onChange={(event) => selectExistingClient(event.target.value)} disabled={existingClientsLoading}>
+                    <option value="">{existingClientsLoading ? "Carregando clientes…" : "Novo cadastro"}</option>
+                    {existingClients.map((existingClient) => <option key={existingClient.id} value={existingClient.id}>{existingClient.name} · {existingClient.whatsapp ?? existingClient.phone}</option>)}
+                  </select>
+                  <small>Ao escolher um nome, os dados cadastrados serão preenchidos abaixo.</small>
+                </label>}
                 <div className="booking-form-grid">
                   <label>
                     Nome completo

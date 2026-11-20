@@ -18,6 +18,7 @@ type BookingPayload = {
   appointmentDate: string;
   startTime: string;
   hairSize: HairSize;
+  clientId?: string;
   rescheduleId?: string;
   couponCode?: string;
   client: {
@@ -40,6 +41,7 @@ function parsePayload(value: unknown): BookingPayload | null {
   const appointmentDate = typeof value.appointmentDate === "string" ? value.appointmentDate.trim() : "";
   const startTime = typeof value.startTime === "string" ? value.startTime.trim() : "";
   const hairSize = value.hairSize;
+  const clientId = typeof value.clientId === "string" ? value.clientId.trim() : "";
   const rescheduleId = typeof value.rescheduleId === "string" ? value.rescheduleId.trim() : "";
   const couponCode = normalizeCoupon(value.couponCode);
   const clientName = typeof value.client.name === "string" ? value.client.name.trim() : "";
@@ -47,7 +49,7 @@ function parsePayload(value: unknown): BookingPayload | null {
   const email = typeof value.client.email === "string" ? value.client.email.trim() : "";
   const notes = typeof value.client.notes === "string" ? value.client.notes.trim() : "";
 
-  if (!serviceId || !professionalId || !/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate) || !isClockTime(startTime) || !isHairSize(hairSize)) return null;
+  if ((value.clientId !== undefined && typeof value.clientId !== "string") || !serviceId || !professionalId || !/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate) || !isClockTime(startTime) || !isHairSize(hairSize)) return null;
   if (clientName.length < 2 || clientName.length > 120 || !phone) return null;
   if (email && (email.length > 160 || !/^\S+@\S+\.\S+$/.test(email))) return null;
   if (notes.length > 500) return null;
@@ -58,6 +60,7 @@ function parsePayload(value: unknown): BookingPayload | null {
     appointmentDate,
     startTime,
     hairSize,
+    clientId: clientId || undefined,
     rescheduleId: rescheduleId || undefined,
     couponCode: couponCode || undefined,
     client: { name: clientName, phone, email: email || undefined, notes: notes || undefined },
@@ -85,6 +88,14 @@ export async function POST(request: Request) {
   try {
     const db = await getDb();
     const currentUser = await getCurrentUser(request);
+    if (payload.clientId && payload.rescheduleId) return json({ message: "Selecione o cadastro de cliente antes de iniciar um novo agendamento." }, 400);
+    if (payload.clientId && (!currentUser || !internalRoles.includes(currentUser.role as (typeof internalRoles)[number]))) {
+      return json({ message: "Somente a equipe do studio pode selecionar um cadastro de cliente." }, 403);
+    }
+    const [selectedClient] = payload.clientId
+      ? await db.select({ id: clients.id }).from(clients).where(and(eq(clients.id, payload.clientId), eq(clients.active, true))).limit(1)
+      : [];
+    if (payload.clientId && !selectedClient) return json({ message: "O cadastro selecionado não está mais ativo." }, 404);
     const settings = await getPublicSettings();
     const nowTime = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
     const [rescheduledAppointment] = payload.rescheduleId && currentUser
@@ -160,7 +171,7 @@ export async function POST(request: Request) {
     const [linkedClient] = currentUser?.role === "client"
       ? await db.select({ id: clients.id }).from(clients).where(eq(clients.userId, currentUser.id)).limit(1)
       : [];
-    const clientId = rescheduledAppointment?.clientId ?? linkedClient?.id ?? crypto.randomUUID();
+    const clientId = rescheduledAppointment?.clientId ?? linkedClient?.id ?? selectedClient?.id ?? crypto.randomUUID();
     const clientValues = {
       name: payload.client.name,
       phone: payload.client.phone,
@@ -234,9 +245,9 @@ export async function POST(request: Request) {
         ...(appointmentNotification ? [appointmentNotification] : []),
         ...(studioNotificationValues.length ? [db.insert(notifications).values(studioNotificationValues)] : []),
       ]);
-    } else if (linkedClient) {
+    } else if (linkedClient || selectedClient) {
       await db.batch([
-        db.update(clients).set(clientValues).where(eq(clients.id, linkedClient.id)),
+        db.update(clients).set(clientValues).where(eq(clients.id, clientId)),
         db.insert(appointments).values(appointmentValues),
         db.insert(appointmentServices).values(appointmentServiceValues),
         ...(appointmentNotification ? [appointmentNotification] : []),
