@@ -155,10 +155,6 @@ export default function FinanceManagement() {
     () => (data?.appointments ?? []).filter((item) => !excludedAppointmentStatuses.has(item.status)),
     [data],
   );
-  const visibleAppointmentIds = useMemo(
-    () => new Set(visibleAppointments.map((item) => item.id)),
-    [visibleAppointments],
-  );
   const selectedAppointment = visibleAppointments.find(
     (item) => item.id === form.appointmentId,
   );
@@ -166,13 +162,12 @@ export default function FinanceManagement() {
     const term = query.trim().toLocaleLowerCase("pt-BR");
     return (data?.transactions ?? []).filter(
       (item) =>
-        visibleAppointmentIds.has(item.appointmentId) &&
         (statusFilter === "all" || item.status === statusFilter) &&
         (!term ||
           [item.clientName, item.serviceName, item.methodName, item.transactionReference]
             .some((value) => value?.toLocaleLowerCase("pt-BR").includes(term))),
     );
-  }, [data, query, statusFilter, visibleAppointmentIds]);
+  }, [data, query, statusFilter]);
 
   function chooseAppointment(appointmentId: string) {
     const appointment = visibleAppointments.find((item) => item.id === appointmentId);

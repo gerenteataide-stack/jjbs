@@ -4,7 +4,8 @@ import { appointmentServices, appointments, clients, serviceCategories, services
 import { requirePermission } from "../../../../lib/admin";
 import { permissionsForRole } from "../../../../lib/permissions";
 
-const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon"];
+const cancelledStatuses = ["cancelled", "cancelled_by_client", "cancelled_by_salon"];
+const excludedAgendaStatuses = [...cancelledStatuses, "rescheduled"];
 
 function todayInFortaleza() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
         .leftJoin(services, eq(services.id, appointmentServices.serviceId))
         .where(and(
           gte(appointments.appointmentDate, today),
-          notInArray(appointments.status, ["cancelled_by_salon", "rescheduled"]),
+          notInArray(appointments.status, excludedAgendaStatuses),
         ))
         .orderBy(asc(appointments.appointmentDate), asc(appointments.startTime))
         .limit(80),
