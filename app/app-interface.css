@@ -98,6 +98,8 @@
 .open-date-services{display:grid;gap:14px;max-width:480px}
 .open-date-services fieldset{display:grid;gap:14px;margin:0;padding:18px;border:1px solid var(--ui-border,#777);border-radius:12px}
 .open-date-services legend{padding:0 6px;font-weight:600}
+.open-date-service-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.open-date-service-actions button{min-height:44px;padding:8px 12px;border:1px solid var(--ui-border,#777);border-radius:10px;background:transparent;color:inherit;cursor:pointer;font:inherit}
 .open-date-service-list{display:grid;gap:4px}
 .open-date-service{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer}
 .open-date-service input{width:20px;height:20px;accent-color:#d4af37}

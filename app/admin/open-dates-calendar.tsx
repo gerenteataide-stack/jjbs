@@ -224,6 +224,19 @@ export default function OpenDatesCalendar({
               {selectedIsOpen ? " · dia liberado" : ""}
             </legend>
             {services.length ? (
+              <div className="open-date-service-actions">
+                <button
+                  type="button"
+                  onClick={() => setSelectedServiceIds(services.map((service) => service.id))}
+                >
+                  Marcar todos
+                </button>
+                <button type="button" onClick={() => setSelectedServiceIds([])}>
+                  Desmarcar todos
+                </button>
+              </div>
+            ) : null}
+            {services.length ? (
               <div className="open-date-service-list">
                 {services.map((service) => (
                   <label className="open-date-service" key={service.id}>
