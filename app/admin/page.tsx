@@ -990,7 +990,6 @@ export default function AdminPage() {
                                       </button>)}
                                     </div> : <p>Nenhum serviço disponível para esta profissional nesse horário.</p>}
                                     <button className="admin-reschedule-confirm" type="button" disabled={saving || rescheduleServicesLoading || !rescheduleServiceId} onClick={() => void updateStatus(appointment.id, appointment.status, rescheduleDate, rescheduleTime, rescheduleServiceId)}>Confirmar reagendamento</button>
-                                  </div>
                                   </div>}
                                 </section>
                               </td>
