@@ -375,12 +375,10 @@ export default function AdminPage() {
     }
     const controller = new AbortController();
     setEditDatesLoading(true);
-    const query = new URLSearchParams({
-      serviceId: editServiceId,
-      professionalId: editingAppointment.professionalId,
-      excludeAppointmentId: editingAppointment.id,
-    });
-    fetch(`/api/booking-dates?${query}`, { cache: "no-store", signal: controller.signal })
+    // Use the same dates shown by the public homepage calendar. Slot
+    // availability is still checked against this appointment's service and
+    // professional after the admin selects a day.
+    fetch("/api/booking-dates", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.message ?? "Não foi possível carregar os dias disponíveis.");
@@ -512,12 +510,8 @@ export default function AdminPage() {
     setRescheduleServiceId("");
     setRescheduleLoading(true);
     try {
-      const query = new URLSearchParams({
-        serviceId: appointment.serviceId ?? "",
-        professionalId: appointment.professionalId,
-        excludeAppointmentId: appointment.id,
-      });
-      const result = await request(`/api/booking-dates?${query}`);
+      // Keep this calendar in sync with the homepage's public agenda.
+      const result = await request("/api/booking-dates");
       setRescheduleDates(Array.isArray(result.dates) ? result.dates : []);
     } catch (cause) {
       setRescheduleDates([]);
