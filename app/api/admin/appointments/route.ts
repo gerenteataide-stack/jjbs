@@ -4,7 +4,7 @@ import { appointmentServices, appointments, blockedTimes, businessHours, clients
 import { requireAdmin } from "../../../../lib/admin";
 import { normalizeWhatsapp } from "../../../../lib/masks";
 import { sendAppointmentPush } from "../../../../lib/firebase-push";
-import { ADMIN_OPEN_REQUIRED_FROM, addMinutes, buildConfiguredStartSlots, isClockTime, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
+import { addMinutes, buildConfiguredStartSlots, isClockTime, timeToMinutes, todayInFortaleza, weekdayForDate } from "../../../../lib/scheduling";
 
 const validStatuses = new Set(["pending_confirmation", "confirmed", "in_service", "completed", "cancelled_by_client", "cancelled_by_salon", "no_show", "rescheduled"]);
 
@@ -91,17 +91,15 @@ export async function PATCH(request: Request) {
         ? [{ serviceId: nextServiceId }]
         : await db.select({ serviceId: appointmentServices.serviceId }).from(appointmentServices)
           .where(eq(appointmentServices.appointmentId, existing.id));
-      if (!dateOverride && nextDate >= ADMIN_OPEN_REQUIRED_FROM) {
+      if (!dateOverride) {
         return Response.json({ message: "Essa data ainda não foi liberada pela administração." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
       if (dateOverride && dateOverride.serviceIds !== null && linkedServices.some((item) => !dateOverride.serviceIds?.includes(item.serviceId))) {
         return Response.json({ message: "O serviço deste agendamento não está liberado para essa data." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
-      if (!dateOverride && linkedServices.length) {
-        const serviceRelations = await db.select({ serviceId: professionalServices.serviceId }).from(professionalServices)
-          .where(and(eq(professionalServices.professionalId, professionalId), inArray(professionalServices.serviceId, linkedServices.map((item) => item.serviceId))));
-        if (serviceRelations.length !== linkedServices.length) return Response.json({ message: "A profissional não atende esse serviço na data escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
-      }
+      const serviceRelations = await db.select({ serviceId: professionalServices.serviceId }).from(professionalServices)
+        .where(and(eq(professionalServices.professionalId, professionalId), inArray(professionalServices.serviceId, linkedServices.map((item) => item.serviceId))));
+      if (serviceRelations.length !== linkedServices.length) return Response.json({ message: "A profissional não atende esse serviço na data escolhida." }, { status: 409, headers: { "Cache-Control": "no-store" } });
       const periods = await db.select({ startTime: businessHours.startTime, endTime: businessHours.endTime, breakStart: businessHours.breakStart, breakEnd: businessHours.breakEnd }).from(businessHours)
         .where(and(eq(businessHours.professionalId, professionalId), eq(businessHours.weekday, weekdayForDate(nextDate)), eq(businessHours.active, true)));
       const [blockedRows, appointmentRows] = await Promise.all([

@@ -265,6 +265,10 @@ export default function AdminPage() {
   const [editAppointmentDate, setEditAppointmentDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [editServiceId, setEditServiceId] = useState("");
+  const [editDates, setEditDates] = useState<string[]>([]);
+  const [editSlots, setEditSlots] = useState<string[]>([]);
+  const [editDatesLoading, setEditDatesLoading] = useState(false);
+  const [editSlotsLoading, setEditSlotsLoading] = useState(false);
   const [rescheduleDates, setRescheduleDates] = useState<string[]>([]);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
@@ -363,6 +367,66 @@ export default function AdminPage() {
     setHoursForm(editableHours(configured));
   }, [schedule, selectedProfessionalId]);
 
+  useEffect(() => {
+    if (!editingAppointment || !editServiceId) {
+      setEditDates([]);
+      setEditDatesLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setEditDatesLoading(true);
+    const query = new URLSearchParams({
+      serviceId: editServiceId,
+      professionalId: editingAppointment.professionalId,
+      excludeAppointmentId: editingAppointment.id,
+    });
+    fetch(`/api/booking-dates?${query}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message ?? "Não foi possível carregar os dias disponíveis.");
+        setEditDates(Array.isArray(result.dates) ? result.dates : []);
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof Error && cause.name !== "AbortError") setEditDates([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEditDatesLoading(false);
+      });
+    return () => controller.abort();
+  }, [editingAppointment?.id, editServiceId]);
+
+  useEffect(() => {
+    if (!editingAppointment || !editServiceId || !editAppointmentDate) {
+      setEditSlots([]);
+      setEditSlotsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setEditSlotsLoading(true);
+    setEditSlots([]);
+    const query = new URLSearchParams({
+      serviceId: editServiceId,
+      professionalId: editingAppointment.professionalId,
+      date: editAppointmentDate,
+      excludeAppointmentId: editingAppointment.id,
+    });
+    fetch(`/api/availability?${query}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message ?? "Não foi possível consultar os horários.");
+        const nextSlots = Array.isArray(result.slots) ? result.slots as string[] : [];
+        setEditSlots(nextSlots);
+        setEditStartTime((current) => nextSlots.includes(current) ? current : "");
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof Error && cause.name !== "AbortError") setEditSlots([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEditSlotsLoading(false);
+      });
+    return () => controller.abort();
+  }, [editingAppointment?.id, editServiceId, editAppointmentDate]);
+
   const selectedProfessional =
     schedule?.professionals.find(
       (item) => item.id === selectedProfessionalId,
@@ -407,6 +471,13 @@ export default function AdminPage() {
   }
   async function saveAppointmentEdit(event: FormEvent<HTMLFormElement>, appointment: Appointment) {
     event.preventDefault();
+    const scheduleChanged = editAppointmentDate !== appointment.appointmentDate ||
+      editStartTime !== appointment.startTime ||
+      editServiceId !== (appointment.serviceId ?? "");
+    if (scheduleChanged && (!editDates.includes(editAppointmentDate) || !editSlots.includes(editStartTime))) {
+      note("Escolha uma data liberada e um horário disponível para este serviço.", true);
+      return;
+    }
     setSaving(true);
     try {
       await request("/api/admin/appointments", {
@@ -441,7 +512,12 @@ export default function AdminPage() {
     setRescheduleServiceId("");
     setRescheduleLoading(true);
     try {
-      const result = await request("/api/booking-dates");
+      const query = new URLSearchParams({
+        serviceId: appointment.serviceId ?? "",
+        professionalId: appointment.professionalId,
+        excludeAppointmentId: appointment.id,
+      });
+      const result = await request(`/api/booking-dates?${query}`);
       setRescheduleDates(Array.isArray(result.dates) ? result.dates : []);
     } catch (cause) {
       setRescheduleDates([]);
@@ -459,7 +535,7 @@ export default function AdminPage() {
     if (!appointment.serviceId) return note("Este agendamento não tem serviço associado para verificar os horários.", true);
     setRescheduleLoading(true);
     try {
-      const query = new URLSearchParams({ serviceId: appointment.serviceId, professionalId: appointment.professionalId, date });
+      const query = new URLSearchParams({ serviceId: appointment.serviceId, professionalId: appointment.professionalId, date, excludeAppointmentId: appointment.id });
       const result = await request(`/api/availability?${query}`);
       setRescheduleSlots(Array.isArray(result.slots) ? result.slots : []);
       if (!result.slots?.length) note("Não há horários livres para esta profissional nesse dia.", true);
@@ -483,6 +559,7 @@ export default function AdminPage() {
             professionalId: appointment.professionalId,
             date,
             time,
+            excludeAppointmentId: appointment.id,
           });
           const response = await fetch(`/api/availability?${query}`, { cache: "no-store" });
           const result = await response.json().catch(() => ({}));
@@ -953,7 +1030,7 @@ export default function AdminPage() {
                 </div>
                 {agenda.length ? (
                   <div className="admin-table-wrap">
-                    <table>
+                    <table className="admin-agenda-table">
                       <thead>
                         <tr>
                           <th>Data e hora</th>
@@ -967,7 +1044,7 @@ export default function AdminPage() {
                         {agenda.map((appointment) => (
                           <Fragment key={appointment.id}>
                           <tr>
-                            <td>
+                            <td data-label="Data e hora">
                               <strong>
                                 {appointment.appointmentDate
                                   .split("-")
@@ -978,17 +1055,17 @@ export default function AdminPage() {
                                 {appointment.startTime}
                               </small>
                             </td>
-                            <td>
+                            <td data-label="Cliente">
                               <strong>{appointment.clientName}</strong>
                               <small>{appointment.clientPhone}</small>
                               <button className="text-button admin-appointment-edit-trigger" type="button" disabled={saving} onClick={() => beginEditAppointment(appointment)}>Editar agendamento</button>
                             </td>
-                            <td>
+                            <td data-label="Serviço">
                               {appointment.serviceName ??
                                 "Serviço não identificado"}
                             </td>
-                            <td>{money(appointment.totalEstimatedCents)}</td>
-                            <td>
+                            <td data-label="Valor">{money(appointment.totalEstimatedCents)}</td>
+                            <td data-label="Status">
                               <label className="admin-status">
                                 <span className="sr-only">
                                   Status de {appointment.clientName}
@@ -1021,14 +1098,20 @@ export default function AdminPage() {
                                   <form className="admin-appointment-edit-form" onSubmit={(event) => void saveAppointmentEdit(event, appointment)}>
                                     <label>Nome do cliente<input autoComplete="name" maxLength={120} required value={editClientName} onChange={(event) => setEditClientName(event.target.value)} /></label>
                                     <label>WhatsApp<input autoComplete="tel" inputMode="tel" maxLength={20} required value={editClientPhone} onChange={(event) => setEditClientPhone(formatWhatsapp(event.target.value))} /></label>
-                                    <label>Serviço<select required value={editServiceId} onChange={(event) => setEditServiceId(event.target.value)}>
+                                    <label>Serviço<select required value={editServiceId} onChange={(event) => { setEditServiceId(event.target.value); setEditStartTime(""); }}>
                                       <option value="">Escolha um serviço</option>
                                       {data?.services.filter((service) => service.active || service.id === appointment.serviceId).map((service) => <option key={service.id} value={service.id}>{service.name}{service.priceCents === null ? " · Sob consulta" : ` · ${money(service.priceCents)}`}</option>)}
                                     </select></label>
-                                    <label>Data<input type="date" min={data?.today} required value={editAppointmentDate} onChange={(event) => setEditAppointmentDate(event.target.value)} /></label>
-                                    <label>Horário de início<input type="time" required value={editStartTime} onChange={(event) => setEditStartTime(event.target.value)} /></label>
-                                    <p>O horário e o serviço serão conferidos com a agenda da profissional antes de salvar.</p>
-                                    <button className="admin-reschedule-confirm" type="submit" disabled={saving || !editServiceId}>{saving ? "Salvando…" : "Salvar alterações"}</button>
+                                    <div className="admin-appointment-edit-calendar">
+                                      <strong>Escolha uma data liberada</strong>
+                                      {editDatesLoading ? <p>Carregando datas configuradas…</p> : editDates.length ? <CalendarMonths days={editDates} today={data?.today ?? ""} selectedDate={editAppointmentDate} onSelectDate={(date) => { setEditAppointmentDate(date); setEditStartTime(""); }} /> : <p>Não há datas futuras liberadas para este serviço e profissional.</p>}
+                                    </div>
+                                    <div className="admin-appointment-edit-times">
+                                      <strong>Horários de início</strong>
+                                      {editSlotsLoading ? <p>Consultando horários…</p> : editAppointmentDate && editDates.includes(editAppointmentDate) ? editSlots.length ? <div className="admin-reschedule-times">{editSlots.map((slot) => <button className={`booking-time-option ${slot === editStartTime ? "selected" : ""}`} type="button" key={slot} aria-pressed={slot === editStartTime} onClick={() => setEditStartTime(slot)}>{slot}</button>)}</div> : <p>Não há horários livres nessa data.</p> : <p>Selecione uma data marcada em amarelo.</p>}
+                                    </div>
+                                    <p>As datas amarelas e os horários seguem as liberações da administração para esta profissional e serviço.</p>
+                                    <button className="admin-reschedule-confirm" type="submit" disabled={saving || !editServiceId || (Boolean(editingAppointment && (editAppointmentDate !== appointment.appointmentDate || editStartTime !== appointment.startTime || editServiceId !== (appointment.serviceId ?? ""))) && (editDatesLoading || editSlotsLoading || !editDates.includes(editAppointmentDate) || !editSlots.includes(editStartTime)))}>{saving ? "Salvando…" : "Salvar alterações"}</button>
                                   </form>
                                 </section>
                               </td>

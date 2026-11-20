@@ -1,5 +1,3 @@
-export const ADMIN_OPEN_REQUIRED_FROM = "2027-01-01";
-
 export type TimeRange = { startTime: string; endTime: string };
 
 export function isClockTime(value: string) {
@@ -39,7 +37,10 @@ export function buildConfiguredStartSlots(periods: { startTime: string; endTime:
 
   const slots: string[] = [];
   for (const hours of [...periods].sort((first, second) => first.startTime.localeCompare(second.startTime))) {
-    if (timeToMinutes(hours.startTime) + durationMinutes > timeToMinutes(hours.endTime)) continue;
+    // A configured business-hours row is a start time. Its stored endTime was
+    // derived from the services assigned at the time it was saved and can be
+    // stale when a longer service is added later.
+    if (timeToMinutes(hours.startTime) + durationMinutes >= 24 * 60) continue;
 
     const range = {
       startTime: hours.startTime,

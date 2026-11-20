@@ -128,6 +128,7 @@ export default function BookingPage() {
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState("");
   const [availableServiceIds, setAvailableServiceIds] = useState<string[]>([]);
+  const [serviceIdsBySlot, setServiceIdsBySlot] = useState<Record<string, string[]>>({});
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [step, setStep] = useState(1);
@@ -164,13 +165,14 @@ export default function BookingPage() {
     dateOptions.find((item) => item.value === date)?.label ??
     "Escolha uma data";
   const dateServices = services.filter((service) =>
-    availableServiceIds.includes(service.id),
+    availableServiceIds.includes(service.id) && (serviceIdsBySlot[time] ?? []).includes(service.id),
   );
 
   function chooseDate(value: string) {
     if (value !== date) {
       setTime("");
       setAvailableServiceIds([]);
+      setServiceIdsBySlot({});
       setProfessionals([]);
       if (date) {
         setServiceId("");
@@ -326,6 +328,13 @@ export default function BookingPage() {
             ? result.serviceIds.filter((value: unknown): value is string => typeof value === "string")
             : [];
           setAvailableServiceIds(nextServiceIds);
+          const nextServiceIdsBySlot = result.serviceIdsBySlot && typeof result.serviceIdsBySlot === "object"
+            ? Object.fromEntries(Object.entries(result.serviceIdsBySlot as Record<string, unknown>).map(([slot, ids]) => [
+                slot,
+                Array.isArray(ids) ? ids.filter((value): value is string => typeof value === "string") : [],
+              ]))
+            : {};
+          setServiceIdsBySlot(nextServiceIdsBySlot);
           setProfessionals([]);
           setSlots(nextSlots);
           if (serviceId && !nextServiceIds.includes(serviceId)) {

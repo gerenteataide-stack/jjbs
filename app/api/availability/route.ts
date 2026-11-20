@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { appointments, blockedTimes, businessHours, openScheduleDates, professionalServices, professionals, services } from "../../../db/schema";
-import { ADMIN_OPEN_REQUIRED_FROM, buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
+import { requireAdmin } from "../../../lib/admin";
+import { buildConfiguredStartSlots, isClockTime, todayInFortaleza, weekdayForDate } from "../../../lib/scheduling";
 
 const cancelledStatuses = ["cancelled_by_client", "cancelled_by_salon", "rescheduled"];
 
@@ -15,6 +16,9 @@ export async function GET(request: Request) {
   const appointmentDate = url.searchParams.get("date")?.trim() ?? "";
   const professionalId = url.searchParams.get("professionalId")?.trim() ?? "";
   const requestedTime = url.searchParams.get("time")?.trim() ?? "";
+  const excludeAppointmentId = url.searchParams.get("excludeAppointmentId")?.trim() ?? "";
+
+  if (excludeAppointmentId && !(await requireAdmin(request))) return noStore({ message: "Acesso restrito." }, 403);
 
   if (!serviceId && !appointmentDate) return noStore({ message: "Escolha uma data para ver os horários disponíveis." }, 400);
   if (requestedTime && !isClockTime(requestedTime)) return noStore({ message: "Escolha um horário válido." }, 400);
@@ -41,15 +45,14 @@ export async function GET(request: Request) {
         db.select({ professionalId: blockedTimes.professionalId, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime })
           .from(blockedTimes)
           .where(eq(blockedTimes.blockDate, appointmentDate)),
-        db.select({ professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime })
+        db.select({ id: appointments.id, professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime })
           .from(appointments)
           .where(and(eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
       ]);
 
       const openDatesByProfessional = new Map(openDates.map(row => [row.professionalId, row.serviceIds]));
       const workingProfessionalIds = [...new Set(hours.map(row => row.professionalId))];
-      const slots = new Set<string>();
-      const serviceIds = new Set<string>();
+      const servicesBySlot = new Map<string, Set<string>>();
       for (const professionalId of workingProfessionalIds) {
         const hasDateOverride = openDatesByProfessional.has(professionalId);
         const openServiceIds = openDatesByProfessional.get(professionalId);
@@ -59,24 +62,24 @@ export async function GET(request: Request) {
             : openServiceIds?.length
               ? eligiblePairs.filter(pair => pair.professionalId === professionalId && openServiceIds.includes(pair.serviceId))
               : []
-          : appointmentDate < ADMIN_OPEN_REQUIRED_FROM
-            ? eligiblePairs.filter(pair => pair.professionalId === professionalId)
-            : [];
-        for (const service of dateServices) serviceIds.add(service.serviceId);
-        const durations = dateServices.map((service) => service.durationMinutes).filter((duration) => duration > 0);
-        if (!durations.length) continue;
+          : [];
         const unavailable = [
           ...blockRows.filter((row) => row.professionalId === professionalId),
-          ...appointmentRows.filter((row) => row.professionalId === professionalId),
+          ...appointmentRows.filter((row) => row.professionalId === professionalId && row.id !== excludeAppointmentId),
         ];
-        const serviceSlots = buildConfiguredStartSlots(
-          hours.filter((row) => row.professionalId === professionalId),
-          Math.min(...durations),
-          unavailable,
-        );
-        for (const slot of serviceSlots) slots.add(slot);
+        const professionalHours = hours.filter((row) => row.professionalId === professionalId);
+        for (const service of dateServices) {
+          const serviceSlots = buildConfiguredStartSlots(professionalHours, service.durationMinutes, unavailable);
+          for (const slot of serviceSlots) {
+            const serviceIds = servicesBySlot.get(slot) ?? new Set<string>();
+            serviceIds.add(service.serviceId);
+            servicesBySlot.set(slot, serviceIds);
+          }
+        }
       }
-      return noStore({ professionals: [], slots: [...slots].sort(), serviceIds: [...serviceIds] });
+      const serviceIdsBySlot = Object.fromEntries([...servicesBySlot].map(([slot, ids]) => [slot, [...ids]]));
+      const serviceIds = [...new Set(Object.values(serviceIdsBySlot).flat())];
+      return noStore({ professionals: [], slots: Object.keys(serviceIdsBySlot).sort(), serviceIds, serviceIdsBySlot });
     }
 
     const [service] = await db.select({ id: services.id, durationMinutes: services.durationMinutes })
@@ -97,7 +100,7 @@ export async function GET(request: Request) {
         .orderBy(asc(professionals.displayOrder), asc(professionals.name));
       const overrides = new Map(openDates.map(professional => [professional.id, professional.serviceIds]));
       dateProfessionals = availableProfessionals.filter(professional => {
-        if (!overrides.has(professional.id)) return appointmentDate < ADMIN_OPEN_REQUIRED_FROM;
+        if (!overrides.has(professional.id)) return false;
         const serviceIds = overrides.get(professional.id);
         return serviceIds === null || Boolean(serviceIds?.includes(service.id));
       })
@@ -114,14 +117,14 @@ export async function GET(request: Request) {
         .orderBy(asc(businessHours.startTime)),
       db.select({ professionalId: blockedTimes.professionalId, startTime: blockedTimes.startTime, endTime: blockedTimes.endTime }).from(blockedTimes)
         .where(and(inArray(blockedTimes.professionalId, professionalIds), eq(blockedTimes.blockDate, appointmentDate))),
-      db.select({ professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments)
+      db.select({ id: appointments.id, professionalId: appointments.professionalId, startTime: appointments.startTime, endTime: appointments.endTime }).from(appointments)
         .where(and(inArray(appointments.professionalId, professionalIds), eq(appointments.appointmentDate, appointmentDate), notInArray(appointments.status, cancelledStatuses))),
     ]);
     const slotsByProfessional = new Map<string, string[]>();
     for (const professional of dateProfessionals) {
       const unavailable = [
         ...blockRows.filter((row) => row.professionalId === professional.id),
-        ...appointmentRows.filter((row) => row.professionalId === professional.id),
+        ...appointmentRows.filter((row) => row.professionalId === professional.id && row.id !== excludeAppointmentId),
       ];
       slotsByProfessional.set(
         professional.id,
