@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { formatWhatsapp } from "../../lib/masks";
 import { isInternalRole } from "../../lib/permissions";
 import AccountReviews from "./account-reviews";
-import { PublicBrand } from "../public-settings";
+import { PublicBrand, usePublicSettings } from "../public-settings";
 import PushNotificationsControl from "../push-notifications-control";
 
 type AccountUser = {
@@ -100,6 +100,7 @@ function money(value: number | null) {
 }
 
 export default function MyAccountPage() {
+  const settings = usePublicSettings();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [user, setUser] = useState<AccountUser | null>(null);
@@ -657,7 +658,11 @@ export default function MyAccountPage() {
               <span className="account-card-label">Sua fidelidade</span>
               <div className="loyalty-stamp-card" aria-label={`${Math.min(loyalty.account.stamps, 5)} de 5 carimbos`}>
                 {Array.from({ length: 5 }, (_, index) => (
-                  <span className={index < Math.min(loyalty.account.stamps, 5) ? "earned" : ""} key={index} aria-hidden="true">{index < Math.min(loyalty.account.stamps, 5) ? "✓" : index + 1}</span>
+                  <span className={index < Math.min(loyalty.account.stamps, 5) ? "earned" : ""} key={index} aria-hidden="true">
+                    {index < Math.min(loyalty.account.stamps, 5)
+                      ? <img src={settings.logoUrl || "/jaqueline-justino-monogram.png?v=1"} alt="" />
+                      : index + 1}
+                  </span>
                 ))}
               </div>
               <p className="loyalty-reward-status">

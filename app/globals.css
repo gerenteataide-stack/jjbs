@@ -51,6 +51,7 @@
 .loyalty-stamp-card { display: grid; gap: 8px; grid-template-columns: repeat(5,minmax(0,1fr)); margin: 19px 0 12px; }
 .loyalty-stamp-card span { align-items: center; aspect-ratio: 1; border: 1px solid rgba(198,166,106,.35); border-radius: 50%; color: #81786e; display: flex; font-size: 13px; justify-content: center; }
 .loyalty-stamp-card span.earned { background: rgba(198,166,106,.14); border-color: var(--gold); color: var(--gold); }
+.loyalty-stamp-card span.earned img { height: 70%; object-fit: contain; width: 70%; }
 .loyalty-reward-status { color: #aa9f90; font-size: 10px; line-height: 1.55; margin: 0 0 8px; }
 .push-marketing-consent { cursor: pointer; min-height: 44px; touch-action: manipulation; }
 .booking-existing-client { color: #b4aba0; display: flex; flex-direction: column; font-size: 10px; gap: 9px; margin: 0 0 23px; }
