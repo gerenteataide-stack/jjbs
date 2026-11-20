@@ -640,30 +640,38 @@ export default function BookingPage() {
                 </p>
                 <fieldset className="booking-fieldset">
                   <legend>Tamanho do cabelo</legend>
-                  <div className="booking-date-grid">
-                    {hairSizes.map((size) => (
-                      <button
-                        className={`booking-date-option ${hairSize === size ? "selected" : ""}`}
-                        type="button"
-                        key={size}
-                        aria-pressed={hairSize === size}
-                        onClick={() => {
-                          if (hairSize && hairSize !== size) {
-                            setServiceId("");
-                            setCouponCode("");
-                            setAppliedCoupon(null);
-                            setProfessionals([]);
-                            setProfessionalId("");
-                          }
-                          setHairSize(size);
-                          setError("");
-                          setStep(4);
-                        }}
-                      >
-                        <strong>{size}</strong>
-                        <small>{size === "P" ? "Pequeno" : size === "M" ? "Médio" : size === "G" ? "Grande" : "Extra grande"}</small>
-                      </button>
-                    ))}
+                  <div className="booking-hair-size-picker">
+                    <figure className="booking-hair-size-photo">
+                      <img
+                        src="/hair-length-guide.png"
+                        alt="Referência visual do comprimento do cabelo, igual à página inicial."
+                      />
+                    </figure>
+                    <div className="booking-hair-size-grid">
+                      {hairSizes.map((size) => (
+                        <button
+                          className={`booking-date-option ${hairSize === size ? "selected" : ""}`}
+                          type="button"
+                          key={size}
+                          aria-label={`Tamanho ${size} — ${size === "P" ? "Pequeno" : size === "M" ? "Médio" : size === "G" ? "Grande" : "Extra grande"}`}
+                          aria-pressed={hairSize === size}
+                          onClick={() => {
+                            if (hairSize && hairSize !== size) {
+                              setServiceId("");
+                              setCouponCode("");
+                              setAppliedCoupon(null);
+                              setProfessionals([]);
+                              setProfessionalId("");
+                            }
+                            setHairSize(size);
+                            setError("");
+                            setStep(4);
+                          }}
+                        >
+                          <strong>{size}</strong>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </fieldset>
               </div>

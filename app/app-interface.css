@@ -112,3 +112,13 @@
 .account-review-stars button[aria-pressed=true]{background:color-mix(in srgb,#d4af37 16%,transparent);border-color:#d4af37}
 .account-review-stars button:focus-visible{outline:3px solid #d4af37;outline-offset:2px}
 .account-review-card form>label span,.account-review-card form small{color:var(--ui-muted,#5e5c53);font-size:13px}
+
+.booking-page .booking-hair-size-picker{align-items:center;display:grid;gap:20px;grid-template-columns:minmax(130px,.7fr) minmax(0,1fr);max-width:680px}
+.booking-page .booking-hair-size-photo{height:290px;margin:0}
+.booking-page .booking-hair-size-photo img{height:100%;object-fit:contain;object-position:center;width:100%}
+.booking-page .booking-hair-size-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.booking-page .booking-hair-size-grid .booking-date-option{align-items:center;display:flex;justify-content:center;min-height:84px}
+.booking-page .booking-hair-size-grid .booking-date-option strong{font-family:'Playfair Display',Georgia,serif;font-size:30px;font-weight:500}
+@media(max-width:520px){.booking-page .booking-hair-size-picker{gap:12px;grid-template-columns:minmax(92px,.65fr) minmax(0,1fr)}.booking-page .booking-hair-size-photo{height:220px}.booking-page .booking-hair-size-grid{gap:8px}.booking-page .booking-hair-size-grid .booking-date-option{min-height:72px}.booking-page .booking-hair-size-grid .booking-date-option strong{font-size:25px}}
+.admin-page .admin-size-prices .admin-form-grid label{align-items:stretch;flex-direction:column;gap:8px}
+.admin-page .admin-size-prices .admin-form-grid input{accent-color:auto;height:auto;min-height:42px;padding:11px 12px;width:100%}

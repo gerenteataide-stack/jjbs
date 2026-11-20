@@ -1494,7 +1494,7 @@ export default function AdminPage() {
                       </label>
                     </div>
                     {serviceForm.priceType !== "consultation" && (
-                      <fieldset className="admin-service-checks">
+                      <fieldset className="admin-service-checks admin-size-prices">
                         <legend>Preço por tamanho (R$)</legend>
                         <div className="admin-form-grid">
                           {hairSizes.map((size) => (

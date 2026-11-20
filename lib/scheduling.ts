@@ -47,16 +47,14 @@ export function buildConfiguredStartSlots(periods: { startTime: string; endTime:
     // stale when a longer service is added later.
     const boundary = orderedPeriods[index + 1]?.startTime ?? hours.endTime;
     const windowEnd = timeToMinutes(boundary);
-    const start = timeToMinutes(hours.startTime);
     const breakRange = hours.breakStart && hours.breakEnd ? { startTime: hours.breakStart, endTime: hours.breakEnd } : null;
 
-    for (let minute = start; minute + durationMinutes <= windowEnd && minute + durationMinutes < 24 * 60; minute += 30) {
-      const startTime = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-      const range = { startTime, endTime: addMinutes(startTime, durationMinutes) };
-      if (breakRange && rangesOverlap(range, breakRange)) continue;
-      if (unavailable.some((item) => rangesOverlap(range, item))) continue;
-      slots.push(startTime);
-    }
+    const startTime = hours.startTime;
+    const range = { startTime, endTime: addMinutes(startTime, durationMinutes) };
+    if (timeToMinutes(range.endTime) > windowEnd || timeToMinutes(range.endTime) >= 24 * 60) continue;
+    if (breakRange && rangesOverlap(range, breakRange)) continue;
+    if (unavailable.some((item) => rangesOverlap(range, item))) continue;
+    slots.push(startTime);
   }
 
   return [...new Set(slots)].sort();
