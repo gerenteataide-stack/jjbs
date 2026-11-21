@@ -211,3 +211,6 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .admin-page .admin-appointment-edit-calendar .calendar-navigation,.admin-page .admin-reschedule-panel .calendar-navigation{gap:6px}
   .admin-page .admin-appointment-edit-calendar .calendar-navigation h3,.admin-page .admin-reschedule-panel .calendar-navigation h3{font-size:17px}
 }
+.admin-portfolio-preview video { aspect-ratio: 16 / 9; background: #090909; object-fit: contain; width: 100%; }
+.work-video { margin-top: 18px; }
+.work-video video { aspect-ratio: 16 / 9; background: #090909; object-fit: contain; width: 100%; }

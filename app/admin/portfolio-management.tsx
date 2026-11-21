@@ -16,6 +16,7 @@ type PortfolioItem = {
   professionalId: string | null;
   professionalName: string | null;
   mainImageUrl: string;
+  videoUrl: string | null;
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
   published: boolean;
@@ -25,6 +26,7 @@ type PortfolioItem = {
 
 type Reference = { id: string; name: string };
 type ImageField = "mainImageUrl" | "beforeImageUrl" | "afterImageUrl";
+type UploadField = ImageField | "videoUrl";
 type PortfolioForm = {
   id?: string;
   title: string;
@@ -33,6 +35,7 @@ type PortfolioForm = {
   serviceId: string;
   professionalId: string;
   mainImageUrl: string;
+  videoUrl: string;
   beforeImageUrl: string;
   afterImageUrl: string;
   published: boolean;
@@ -47,6 +50,7 @@ const emptyPortfolio: PortfolioForm = {
   serviceId: "",
   professionalId: "",
   mainImageUrl: "",
+  videoUrl: "",
   beforeImageUrl: "",
   afterImageUrl: "",
   published: true,
@@ -71,7 +75,7 @@ export default function PortfolioManagement() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingField, setUploadingField] = useState<ImageField | null>(null);
+  const [uploadingField, setUploadingField] = useState<UploadField | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -131,6 +135,7 @@ export default function PortfolioManagement() {
       serviceId: item.serviceId ?? "",
       professionalId: item.professionalId ?? "",
       mainImageUrl: item.mainImageUrl,
+      videoUrl: item.videoUrl ?? "",
       beforeImageUrl: item.beforeImageUrl ?? "",
       afterImageUrl: item.afterImageUrl ?? "",
       published: item.published,
@@ -163,6 +168,24 @@ export default function PortfolioManagement() {
     }
   }
 
+  async function uploadVideo(file: File) {
+    setUploadingField("videoUrl");
+    setIsError(false);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const result = await request("/api/admin/media", { method: "POST", body });
+      if (typeof result.mediaUrl !== "string") throw new Error("O envio do vídeo não retornou um arquivo válido.");
+      setForm((current) => ({ ...current, videoUrl: result.mediaUrl as string }));
+      setFeedback("Vídeo enviado com sucesso.");
+    } catch (cause) {
+      setIsError(true);
+      setFeedback(cause instanceof Error ? cause.message : "Não foi possível enviar o vídeo.");
+    } finally {
+      setUploadingField(null);
+    }
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -174,6 +197,7 @@ export default function PortfolioManagement() {
           ...form,
           serviceId: form.serviceId || null,
           professionalId: form.professionalId || null,
+          videoUrl: form.videoUrl || null,
           beforeImageUrl: form.beforeImageUrl || null,
           afterImageUrl: form.afterImageUrl || null,
           displayOrder: Number(form.displayOrder),
@@ -341,6 +365,21 @@ export default function PortfolioManagement() {
             />
             <small>{uploadingField === "mainImageUrl" ? "Enviando imagem..." : form.mainImageUrl ? "Imagem selecionada. Escolha outra para substituir." : "Fotos de até 25 MB. Ajustamos o tamanho antes do envio."}</small>
           </label>
+          <label className="portfolio-file-field">
+            Vídeo do procedimento (opcional)
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+              disabled={saving || uploadingField !== null}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadVideo(file);
+                event.target.value = "";
+              }}
+            />
+            <small>{uploadingField === "videoUrl" ? "Enviando vídeo..." : form.videoUrl ? "Vídeo selecionado. Escolha outro para substituir." : "Vídeos MP4, MOV ou WebM de até 4 MB."}</small>
+            {form.videoUrl && <button className="portfolio-remove-image" type="button" disabled={saving || uploadingField !== null} onClick={() => setForm((current) => ({ ...current, videoUrl: "" }))}>Remover vídeo</button>}
+          </label>
           <div className="admin-form-grid">
             <label className="portfolio-file-field">
               Imagem antes — foto do celular (opcional)
@@ -371,12 +410,18 @@ export default function PortfolioManagement() {
               {form.afterImageUrl && <button className="portfolio-remove-image" type="button" disabled={saving || uploadingField !== null} onClick={() => setForm((current) => ({ ...current, afterImageUrl: "" }))}>Remover imagem</button>}
             </label>
           </div>
-          {(form.mainImageUrl || form.beforeImageUrl || form.afterImageUrl) && (
-            <div className="admin-portfolio-previews" aria-label="Prévia das fotos do trabalho">
+          {(form.mainImageUrl || form.videoUrl || form.beforeImageUrl || form.afterImageUrl) && (
+            <div className="admin-portfolio-previews" aria-label="Prévia das mídias do trabalho">
               {form.mainImageUrl && (
                 <div className="admin-portfolio-preview">
                   <img src={form.mainImageUrl} alt="Prévia da imagem principal" onError={(event) => { event.currentTarget.style.display = "none"; }} />
                   <span>Imagem principal</span>
+                </div>
+              )}
+              {form.videoUrl && (
+                <div className="admin-portfolio-preview">
+                  <video src={form.videoUrl} controls playsInline preload="metadata" aria-label="Prévia do vídeo do procedimento" />
+                  <span>Vídeo do procedimento</span>
                 </div>
               )}
               {form.beforeImageUrl && (
@@ -496,6 +541,7 @@ export default function PortfolioManagement() {
                     <small>
                       {item.professionalName ?? "Sem profissional"}
                       {item.serviceName ? ` · ${item.serviceName}` : ""}
+                      {item.videoUrl ? " · Vídeo" : ""}
                     </small>
                   </div>
                   <button

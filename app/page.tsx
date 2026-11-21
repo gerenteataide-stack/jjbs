@@ -19,7 +19,7 @@ const getHighlights = cache(async function getHighlights() {
     const [serviceRows, workRows] = await Promise.all([
       db.select({ id: services.id, name: services.name, description: services.description, duration: services.durationMinutes })
         .from(services).leftJoin(serviceCategories, eq(serviceCategories.id, services.categoryId)).where(eq(services.active, true)).orderBy(asc(serviceCategories.displayOrder), asc(services.name)).limit(3),
-      db.select({ id: portfolioItems.id, image: portfolioItems.mainImageUrl, category: portfolioItems.category, title: portfolioItems.title })
+      db.select({ id: portfolioItems.id, image: portfolioItems.mainImageUrl, videoUrl: portfolioItems.videoUrl, category: portfolioItems.category, title: portfolioItems.title })
         .from(portfolioItems).where(and(eq(portfolioItems.published, true), eq(portfolioItems.featured, true))).orderBy(asc(portfolioItems.displayOrder)).limit(3),
     ]);
     return { serviceRows, workRows: workRows.filter(work => !/^https?:\/\/(?:images\.)?unsplash\.com\//i.test(work.image)) };
@@ -68,7 +68,7 @@ async function HomeWork() {
   return (
     <section className="home-work home-section" aria-labelledby="work-title">
       <div className="home-section-top"><h2 id="work-title">Nossa assinatura.</h2><a className="home-link" href="/trabalhos">Ver todos os trabalhos ↗</a></div>
-      <div className={`home-work-grid${workRows.length < 3 ? " home-work-pair" : ""}`}>{workRows.map(work => <a href="/trabalhos" key={work.id}><figure><img src={work.image} alt={work.title || work.category || "Trabalho realizado no studio"} loading="lazy" /><figcaption><span>{work.title || work.category || "Conheça este resultado"}</span><span aria-hidden="true">↗</span></figcaption></figure>{work.title && work.category && work.title !== work.category && <p>{work.category}</p>}</a>)}</div>
+      <div className={`home-work-grid${workRows.length < 3 ? " home-work-pair" : ""}`}>{workRows.map(work => <article key={work.id}><a href="/trabalhos"><figure><img src={work.image} alt={work.title || work.category || "Trabalho realizado no studio"} loading="lazy" /><figcaption><span>{work.title || work.category || "Conheça este resultado"}</span><span aria-hidden="true">↗</span></figcaption></figure></a>{work.videoUrl && <video className="home-work-video" src={work.videoUrl} controls playsInline preload="metadata" aria-label={`Vídeo do procedimento: ${work.title || work.category}`} />}{work.title && work.category && work.title !== work.category && <p>{work.category}</p>}</article>)}</div>
     </section>
   );
 }

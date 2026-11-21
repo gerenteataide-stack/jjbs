@@ -17,6 +17,7 @@ type PortfolioInput = {
   serviceId: string | null;
   professionalId: string | null;
   mainImageUrl: string;
+  videoUrl: string | null;
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
   published: boolean;
@@ -52,6 +53,7 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
   const serviceId = optionalText(value.serviceId, 120);
   const professionalId = optionalText(value.professionalId, 120);
   const mainImageUrl = validStoredImagePath(value.mainImageUrl, true);
+  const videoUrl = validStoredImagePath(value.videoUrl);
   const beforeImageUrl = validStoredImagePath(value.beforeImageUrl);
   const afterImageUrl = validStoredImagePath(value.afterImageUrl);
   const displayOrder =
@@ -73,6 +75,7 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
       serviceId,
       professionalId,
       mainImageUrl,
+      videoUrl,
       beforeImageUrl,
       afterImageUrl,
     ].includes(undefined)
@@ -93,6 +96,7 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
     serviceId: serviceId ?? null,
     professionalId: professionalId ?? null,
     mainImageUrl,
+    videoUrl: videoUrl ?? null,
     beforeImageUrl: beforeImageUrl ?? null,
     afterImageUrl: afterImageUrl ?? null,
     published: value.published === true,
@@ -109,6 +113,7 @@ function values(input: PortfolioInput) {
     serviceId: input.serviceId,
     professionalId: input.professionalId,
     mainImageUrl: input.mainImageUrl,
+    videoUrl: input.videoUrl,
     beforeImageUrl: input.beforeImageUrl,
     afterImageUrl: input.afterImageUrl,
     published: input.published,
@@ -168,6 +173,7 @@ export async function GET(request: Request) {
           professionalId: portfolioItems.professionalId,
           professionalName: professionals.name,
           mainImageUrl: portfolioItems.mainImageUrl,
+          videoUrl: portfolioItems.videoUrl,
           beforeImageUrl: portfolioItems.beforeImageUrl,
           afterImageUrl: portfolioItems.afterImageUrl,
           published: portfolioItems.published,
