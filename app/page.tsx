@@ -116,7 +116,7 @@ export default async function Home() {
         <div className="home-hero-copy">
           <h1 id="home-title">{settings.homepageHeadline || "Beleza com assinatura."}</h1>
           <p>{settings.homepageDescription || `${settings.salonName}: cabelo, cuidado e um olhar só para você. Um atendimento que começa com escuta e termina com o seu estilo.`}</p>
-          <a className="home-button" href="#agenda">Agendar meu horário <span aria-hidden="true">↘</span></a>
+          <a className="home-button" href="/agendar">Agendar meu horário <span aria-hidden="true">↘</span></a>
           <a className="home-secondary" href="/servicos">Encontre seu cuidado <span aria-hidden="true">↓</span></a>
           <p className="home-hero-note">Do primeiro cuidado ao toque final, o seu estilo guia cada escolha.</p>
         </div>
@@ -149,7 +149,7 @@ export default async function Home() {
       </section>
       <Suspense fallback={null}><HomeWork /></Suspense>
       <ReviewsHighlight />
-      <section className="home-booking home-section" aria-labelledby="booking-title"><div><h2 id="booking-title">Reserve um tempo<br />para você.</h2><p>Escolha seu serviço, consulte os horários e faça seu agendamento pelo app.</p></div><div><a className="home-button" href="#agenda">Escolher meu horário ↘</a><a className="home-secondary" href="/lista-de-espera">Não encontrou horário? Entre na lista de espera ↗</a></div></section>
+      <section className="home-booking home-section" aria-labelledby="booking-title"><div><h2 id="booking-title">Reserve um tempo<br />para você.</h2><p>Escolha seu serviço, consulte os horários e faça seu agendamento pelo app.</p></div><div><a className="home-button" href="/agendar">Escolher meu horário ↘</a><a className="home-secondary" href="/lista-de-espera">Não encontrou horário? Entre na lista de espera ↗</a></div></section>
       <section className="home-faq home-section" aria-labelledby="faq-title">
         <div><h2 id="faq-title">Pode chegar<br />sem dúvidas.</h2><p>O essencial para planejar a sua visita com tranquilidade.</p><a className="home-link" href={whatsapp}>Tire uma dúvida pelo WhatsApp ↗</a></div>
         <div className="home-faq-list">

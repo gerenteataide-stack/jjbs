@@ -75,7 +75,7 @@ npm.cmd run admin:password-reset
 
 ## Validação do app
 
-O build de produção atual usa Next.js: `npm.cmd run build`. A suíte completa roda com `npm.cmd test`.
+O build de produção atual usa Next.js: `npm.cmd run build`. O build não aplica migrations automaticamente. Aplique migrations com `npm.cmd run db:migrate` somente depois de validá-las em uma branch Neon não produtiva e confirmar explicitamente o banco de destino. A suíte completa roda com `npm.cmd test`.
 Para incluir o teste HTTP da página inicial, inicie o build de produção e defina `TEST_BASE_URL` com sua URL antes de executar os testes. Sem essa variável, apenas o teste HTTP é marcado como pendente; os testes de regras e de PWA continuam sendo executados.
 
 As fotos de celular são preparadas no navegador antes do envio (arquivo original de até 25 MB; imagem enviada de até 3 MB). JPEG, PNG e WebP são processados diretamente; HEIC/HEIF dependem da capacidade de decodificação do navegador, com orientação para usar JPEG quando não houver suporte. O servidor continua validando a assinatura e o limite do arquivo recebido.
