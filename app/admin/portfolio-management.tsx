@@ -194,6 +194,15 @@ export default function PortfolioManagement() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      form.beforeImageUrl &&
+      form.afterImageUrl &&
+      form.beforeImageUrl === form.afterImageUrl
+    ) {
+      setIsError(true);
+      setFeedback("As fotos de antes e depois precisam ser arquivos diferentes.");
+      return;
+    }
     setSaving(true);
     try {
       const result = await request("/api/admin/portfolio", {
@@ -399,6 +408,20 @@ export default function PortfolioManagement() {
               }}
             />
             <small>{uploadingField === "mainImageUrl" ? "Enviando imagem..." : form.mainImageUrl ? "Imagem selecionada. Escolha outra para substituir." : "Fotos de até 25 MB. Ajustamos o tamanho antes do envio."}</small>
+            {form.mainImageUrl && (
+              <button
+                className="portfolio-remove-image"
+                type="button"
+                disabled={saving || uploadingField !== null}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setForm((current) => ({ ...current, mainImageUrl: "" }));
+                }}
+              >
+                Remover imagem
+              </button>
+            )}
           </label>
           <label className="portfolio-file-field">
             Vídeo do procedimento (opcional)
@@ -413,7 +436,20 @@ export default function PortfolioManagement() {
               }}
             />
             <small>{uploadingField === "videoUrl" ? "Enviando vídeo..." : form.videoUrl ? "Vídeo selecionado. Escolha outro para substituir." : "Vídeos MP4, MOV ou WebM de até 4 MB."}</small>
-            {form.videoUrl && <button className="portfolio-remove-image" type="button" disabled={saving || uploadingField !== null} onClick={() => setForm((current) => ({ ...current, videoUrl: "" }))}>Remover vídeo</button>}
+            {form.videoUrl && (
+              <button
+                className="portfolio-remove-image"
+                type="button"
+                disabled={saving || uploadingField !== null}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setForm((current) => ({ ...current, videoUrl: "" }));
+                }}
+              >
+                Remover vídeo
+              </button>
+            )}
           </label>
           <div className="admin-form-grid">
             <label className="portfolio-file-field">
@@ -428,7 +464,20 @@ export default function PortfolioManagement() {
                   event.target.value = "";
                 }}
               />
-              {form.beforeImageUrl && <button className="portfolio-remove-image" type="button" disabled={saving || uploadingField !== null} onClick={() => setForm((current) => ({ ...current, beforeImageUrl: "" }))}>Remover imagem</button>}
+              {form.beforeImageUrl && (
+                <button
+                  className="portfolio-remove-image"
+                  type="button"
+                  disabled={saving || uploadingField !== null}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setForm((current) => ({ ...current, beforeImageUrl: "" }));
+                  }}
+                >
+                  Remover imagem
+                </button>
+              )}
             </label>
             <label className="portfolio-file-field">
               Imagem depois — foto do celular (opcional)
@@ -442,7 +491,20 @@ export default function PortfolioManagement() {
                   event.target.value = "";
                 }}
               />
-              {form.afterImageUrl && <button className="portfolio-remove-image" type="button" disabled={saving || uploadingField !== null} onClick={() => setForm((current) => ({ ...current, afterImageUrl: "" }))}>Remover imagem</button>}
+              {form.afterImageUrl && (
+                <button
+                  className="portfolio-remove-image"
+                  type="button"
+                  disabled={saving || uploadingField !== null}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setForm((current) => ({ ...current, afterImageUrl: "" }));
+                  }}
+                >
+                  Remover imagem
+                </button>
+              )}
             </label>
           </div>
           {(form.mainImageUrl || form.videoUrl || form.beforeImageUrl || form.afterImageUrl) && (
@@ -461,13 +523,13 @@ export default function PortfolioManagement() {
               )}
               {form.beforeImageUrl && (
                 <div className="admin-portfolio-preview">
-                  <img src={form.beforeImageUrl} alt="Prévia da foto de antes" onError={(event) => { event.currentTarget.style.display = "none"; }} />
+                  <img key={form.beforeImageUrl} src={form.beforeImageUrl} alt="Prévia da foto de antes" onError={(event) => { event.currentTarget.style.display = "none"; }} />
                   <span>Antes</span>
                 </div>
               )}
               {form.afterImageUrl && (
                 <div className="admin-portfolio-preview">
-                  <img src={form.afterImageUrl} alt="Prévia da foto de depois" onError={(event) => { event.currentTarget.style.display = "none"; }} />
+                  <img key={form.afterImageUrl} src={form.afterImageUrl} alt="Prévia da foto de depois" onError={(event) => { event.currentTarget.style.display = "none"; }} />
                   <span>Depois</span>
                 </div>
               )}

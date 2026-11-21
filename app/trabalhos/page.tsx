@@ -170,13 +170,13 @@ export default function WorksPage() {
                   <div className="work-comparison" aria-label={`Fotos do resultado: ${item.title}`}>
                     {item.beforeImageUrl && (
                       <figure>
-                        <img src={item.beforeImageUrl} alt={`${item.title} — antes`} loading="lazy" />
+                        <img key={item.beforeImageUrl} src={item.beforeImageUrl} alt={`${item.title} — antes`} loading="lazy" />
                         <figcaption>Antes</figcaption>
                       </figure>
                     )}
                     {item.afterImageUrl && (
                       <figure>
-                        <img src={item.afterImageUrl} alt={`${item.title} — depois`} loading="lazy" />
+                        <img key={item.afterImageUrl} src={item.afterImageUrl} alt={`${item.title} — depois`} loading="lazy" />
                         <figcaption>Depois</figcaption>
                       </figure>
                     )}
