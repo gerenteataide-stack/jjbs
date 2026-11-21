@@ -15,7 +15,7 @@ type PortfolioItem = {
   serviceName: string | null;
   professionalId: string | null;
   professionalName: string | null;
-  mainImageUrl: string;
+  mainImageUrl: string | null;
   videoUrl: string | null;
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
@@ -140,7 +140,7 @@ export default function PortfolioManagement() {
       category: item.category,
       serviceId: item.serviceId ?? "",
       professionalId: item.professionalId ?? "",
-      mainImageUrl: item.mainImageUrl,
+      mainImageUrl: item.mainImageUrl ?? "",
       videoUrl: item.videoUrl ?? "",
       beforeImageUrl: item.beforeImageUrl ?? "",
       afterImageUrl: item.afterImageUrl ?? "",
@@ -395,11 +395,10 @@ export default function PortfolioManagement() {
             </label>
           </div>
           <label className="portfolio-file-field">
-            Imagem principal (foto do celular)
+            Imagem principal (opcional)
             <input
               type="file"
               accept={imageUploadAccept}
-              required={!form.mainImageUrl}
               disabled={saving || uploadingField !== null}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -407,7 +406,7 @@ export default function PortfolioManagement() {
                 event.target.value = "";
               }}
             />
-            <small>{uploadingField === "mainImageUrl" ? "Enviando imagem..." : form.mainImageUrl ? "Imagem selecionada. Escolha outra para substituir." : "Fotos de até 25 MB. Ajustamos o tamanho antes do envio."}</small>
+            <small>{uploadingField === "mainImageUrl" ? "Enviando imagem..." : form.mainImageUrl ? "Imagem selecionada. Escolha outra para substituir." : "Opcional. Inclua ao menos uma mídia: foto principal, antes/depois ou vídeo."}</small>
             {form.mainImageUrl && (
               <button
                 className="portfolio-remove-image"
@@ -626,7 +625,9 @@ export default function PortfolioManagement() {
                   className={!item.published ? "unpublished" : ""}
                   key={item.id}
                 >
-                  <img src={item.mainImageUrl} alt="" />
+                  {(item.mainImageUrl || item.beforeImageUrl || item.afterImageUrl) && (
+                    <img src={item.mainImageUrl || item.beforeImageUrl || item.afterImageUrl || ""} alt="" />
+                  )}
                   <div>
                     <span>
                       {item.category} ·{" "}

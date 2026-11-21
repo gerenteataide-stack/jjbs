@@ -17,7 +17,7 @@ type PortfolioInput = {
   category: string;
   serviceId: string | null;
   professionalId: string | null;
-  mainImageUrl: string;
+  mainImageUrl: string | null;
   videoUrl: string | null;
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
@@ -53,7 +53,7 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
     typeof value.category === "string" ? value.category.trim() : "";
   const serviceId = optionalText(value.serviceId, 120);
   const professionalId = optionalText(value.professionalId, 120);
-  const mainImageUrl = validStoredImagePath(value.mainImageUrl, true);
+  const mainImageUrl = validStoredImagePath(value.mainImageUrl);
   const videoUrl = validStoredImagePath(value.videoUrl);
   const beforeImageUrl = validStoredImagePath(value.beforeImageUrl);
   const afterImageUrl = validStoredImagePath(value.afterImageUrl);
@@ -83,7 +83,7 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
   )
     return null;
   if (
-    !mainImageUrl ||
+    (!mainImageUrl && !beforeImageUrl && !afterImageUrl && !videoUrl) ||
     !Number.isInteger(displayOrder) ||
     displayOrder < 0 ||
     displayOrder > 9999
@@ -283,7 +283,7 @@ export async function POST(request: Request) {
       return noStore(
         {
           message:
-            "Revise título, categoria, descrição, ordem e links HTTPS das imagens.",
+            "Revise os dados e inclua ao menos uma mídia: foto principal, fotos de antes e depois ou vídeo.",
         },
         400,
       );

@@ -10,7 +10,7 @@ type WorkItem = {
   title: string;
   description: string;
   category: string;
-  mainImageUrl: string;
+  mainImageUrl: string | null;
   videoUrl: string | null;
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
@@ -155,12 +155,14 @@ export default function WorksPage() {
                 className={`work-card work-card-${(index % 3) + 1}`}
                 key={item.id}
               >
-                <div className="work-image">
-                  <img src={item.mainImageUrl} alt={item.title} />
-                  <span className="work-number">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                </div>
+                {item.mainImageUrl && (
+                  <div className="work-image">
+                    <img src={item.mainImageUrl} alt={item.title} />
+                    <span className="work-number">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                )}
                 {item.videoUrl && (
                   <div className="work-video">
                     <video src={item.videoUrl} controls playsInline preload="metadata" aria-label={`Vídeo do procedimento: ${item.title}`} />

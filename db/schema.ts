@@ -198,7 +198,7 @@ export const portfolioItems = pgTable(
     category: text("category").notNull(),
     serviceId: text("service_id").references(() => services.id),
     professionalId: text("professional_id").references(() => professionals.id),
-    mainImageUrl: text("main_image_url").notNull(),
+    mainImageUrl: text("main_image_url"),
     videoUrl: text("video_url"),
     beforeImageUrl: text("before_image_url"),
     afterImageUrl: text("after_image_url"),
