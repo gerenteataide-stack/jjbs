@@ -28,6 +28,25 @@ const getHighlights = cache(async function getHighlights() {
   }
 });
 
+function WhatsappBrandIcon() {
+  return (
+    <svg className="home-social-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20.4 11.7a8.4 8.4 0 0 1-12.5 7.3L3 20.2l1.3-4.7a8.4 8.4 0 1 1 16.1-3.8Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8.3 7.6c-.4-.4-.9-.2-1.1.2-.4.7-.5 1.5-.2 2.4.7 2.3 3.1 4.7 5.4 5.4.9.3 1.7.2 2.4-.2.4-.2.6-.7.2-1.1l-1.3-1.3c-.3-.3-.7-.3-1-.1l-.7.5c-1.1-.5-1.9-1.3-2.4-2.4l.5-.7c.2-.3.2-.7-.1-1L8.3 7.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function InstagramBrandIcon() {
+  return (
+    <svg className="home-social-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="17.5" cy="6.7" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 function HomeScheduleLoading() {
   return (
     <section className="home-section home-schedule" aria-busy="true">
@@ -139,7 +158,7 @@ export default async function Home() {
           <details><summary>E se eu precisar cancelar?<span aria-hidden="true">+</span></summary><p>{settings.cancellationPolicy}</p></details>
         </div>
       </section>
-      <footer className="home-footer"><div className="home-footer-top"><div><a className="home-footer-name" href="#conteudo">{name}<small>Beauty Studio</small></a><p>{settings.address || "Consulte a localização com o studio."}</p></div><nav aria-label="Links do studio"><a href="/promocoes">Promoções</a><a href="/trabalhos">Trabalhos</a><a href="/minha-conta">Minha conta</a></nav><nav aria-label="Contato e redes"><a href={whatsapp}>WhatsApp ↗</a>{settings.instagram && <a href={instagramHref(settings.instagram)} target="_blank" rel="noreferrer">Instagram ↗</a>}<a href="/contato">Fale com o studio ↗</a></nav></div><div className="home-footer-bottom"><span>© {new Date().getFullYear()} {settings.salonName}</span><a href="/privacidade">Privacidade</a><a href="#conteudo">Voltar ao início ↑</a></div></footer>
+      <footer className="home-footer"><div className="home-footer-top"><div><a className="home-footer-name" href="#conteudo">{name}<small>Beauty Studio</small></a><p>{settings.address || "Consulte a localização com o studio."}</p></div><nav aria-label="Links do studio"><a href="/promocoes">Promoções</a><a href="/trabalhos">Trabalhos</a><a href="/minha-conta">Minha conta</a></nav><nav aria-label="Contato e redes"><a className="home-social-link" href={whatsapp}><WhatsappBrandIcon />WhatsApp ↗</a>{settings.instagram && <a className="home-social-link" href={instagramHref(settings.instagram)} target="_blank" rel="noreferrer"><InstagramBrandIcon />Instagram ↗</a>}<a href="/contato">Fale com o studio ↗</a></nav></div><div className="home-footer-bottom"><span>© {new Date().getFullYear()} {settings.salonName}</span><a href="/privacidade">Privacidade</a><a href="#conteudo">Voltar ao início ↑</a></div></footer>
     </main>
   );
 }
