@@ -46,7 +46,7 @@ type PortfolioForm = {
 const emptyPortfolio: PortfolioForm = {
   title: "",
   description: "",
-  category: "Coloração",
+  category: "",
   serviceId: "",
   professionalId: "",
   mainImageUrl: "",
@@ -69,6 +69,7 @@ function messageOf(value: unknown, fallback: string) {
 
 export default function PortfolioManagement() {
   const [items, setItems] = useState<PortfolioItem[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [services, setServices] = useState<Reference[]>([]);
   const [professionals, setProfessionals] = useState<Reference[]>([]);
   const [form, setForm] = useState<PortfolioForm>(emptyPortfolio);
@@ -97,6 +98,11 @@ export default function PortfolioManagement() {
       );
       setItems(
         Array.isArray(result.items) ? (result.items as PortfolioItem[]) : [],
+      );
+      setCategories(
+        Array.isArray(result.categories)
+          ? result.categories.filter((category): category is string => typeof category === "string")
+          : [],
       );
       setServices(
         Array.isArray(result.services) ? (result.services as Reference[]) : [],
@@ -219,6 +225,27 @@ export default function PortfolioManagement() {
     }
   }
 
+  async function remove(item: Pick<PortfolioItem, "id" | "title">) {
+    if (!window.confirm(`Excluir “${item.title}” da galeria? Essa ação não poderá ser desfeita.`)) return;
+    setSaving(true);
+    setIsError(false);
+    try {
+      const result = await request("/api/admin/portfolio", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+      setFeedback(messageOf(result, "Trabalho excluído da galeria."));
+      if (form.id === item.id) setForm(emptyPortfolio);
+      await load();
+    } catch (cause) {
+      setIsError(true);
+      setFeedback(cause instanceof Error ? cause.message : "Não foi possível excluir o trabalho.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="admin-portfolio-module">
       {feedback && (
@@ -242,9 +269,14 @@ export default function PortfolioManagement() {
               </h2>
             </div>
             {form.id && (
-              <button className="text-button" type="button" disabled={saving || uploadingField !== null} onClick={reset}>
-                Novo cadastro
-              </button>
+              <div className="portfolio-edit-actions">
+                <button className="portfolio-delete-button" type="button" disabled={saving || uploadingField !== null} onClick={() => form.id && void remove({ id: form.id, title: form.title })}>
+                  Excluir trabalho
+                </button>
+                <button className="text-button" type="button" disabled={saving || uploadingField !== null} onClick={reset}>
+                  Novo cadastro
+                </button>
+              </div>
             )}
           </div>
           <label>
@@ -264,7 +296,7 @@ export default function PortfolioManagement() {
           <div className="admin-form-grid">
             <label>
               Categoria
-              <input
+              <select
                 value={form.category}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -272,10 +304,13 @@ export default function PortfolioManagement() {
                     category: event.target.value,
                   }))
                 }
-                maxLength={80}
-                placeholder="Ex.: Coloração"
                 required
-              />
+              >
+                <option value="">Selecione uma categoria</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
             </label>
             <label>
               Ordem de exibição
@@ -544,13 +579,23 @@ export default function PortfolioManagement() {
                       {item.videoUrl ? " · Vídeo" : ""}
                     </small>
                   </div>
-                  <button
-                    className="text-button"
-                    type="button"
-                    disabled={saving || uploadingField !== null} onClick={() => edit(item)}
-                  >
-                    Editar
-                  </button>
+                  <div className="portfolio-list-actions">
+                    <button
+                      className="text-button"
+                      type="button"
+                      disabled={saving || uploadingField !== null} onClick={() => edit(item)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="portfolio-delete-button"
+                      type="button"
+                      disabled={saving || uploadingField !== null}
+                      onClick={() => void remove(item)}
+                    >
+                      Excluir
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
