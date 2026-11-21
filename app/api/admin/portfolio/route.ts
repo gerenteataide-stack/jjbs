@@ -72,14 +72,12 @@ function parsePortfolio(value: unknown): PortfolioInput | null {
   )
     return null;
   if (
-    [
-      serviceId,
-      professionalId,
-      mainImageUrl,
-      videoUrl,
-      beforeImageUrl,
-      afterImageUrl,
-    ].includes(undefined)
+    serviceId === undefined ||
+    professionalId === undefined ||
+    mainImageUrl === undefined ||
+    videoUrl === undefined ||
+    beforeImageUrl === undefined ||
+    afterImageUrl === undefined
   )
     return null;
   if (
