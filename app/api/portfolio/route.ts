@@ -23,7 +23,7 @@ export async function GET() {
       .limit(100);
     return Response.json(
       { items },
-      { headers: { "Cache-Control": "public, max-age=60, s-maxage=300" } },
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
     return Response.json(

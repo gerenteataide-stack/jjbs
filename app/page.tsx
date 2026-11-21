@@ -19,10 +19,10 @@ const getHighlights = cache(async function getHighlights() {
     const [serviceRows, workRows] = await Promise.all([
       db.select({ id: services.id, name: services.name, description: services.description, duration: services.durationMinutes })
         .from(services).leftJoin(serviceCategories, eq(serviceCategories.id, services.categoryId)).where(eq(services.active, true)).orderBy(asc(serviceCategories.displayOrder), asc(services.name)).limit(3),
-      db.select({ id: portfolioItems.id, image: portfolioItems.mainImageUrl, beforeImageUrl: portfolioItems.beforeImageUrl, afterImageUrl: portfolioItems.afterImageUrl, videoUrl: portfolioItems.videoUrl, category: portfolioItems.category, title: portfolioItems.title })
+      db.select({ id: portfolioItems.id, image: portfolioItems.mainImageUrl, videoUrl: portfolioItems.videoUrl, category: portfolioItems.category, title: portfolioItems.title })
         .from(portfolioItems).where(and(eq(portfolioItems.published, true), eq(portfolioItems.featured, true))).orderBy(asc(portfolioItems.displayOrder)).limit(3),
     ]);
-    return { serviceRows, workRows: workRows.map(work => ({ ...work, image: work.image ?? work.beforeImageUrl ?? work.afterImageUrl })).filter(work => !work.image || !/^https?:\/\/(?:images\.)?unsplash\.com\//i.test(work.image)) };
+    return { serviceRows, workRows: workRows.filter(work => !work.image || !/^https?:\/\/(?:images\.)?unsplash\.com\//i.test(work.image)) };
   } catch {
     return { serviceRows: [], workRows: [] };
   }
