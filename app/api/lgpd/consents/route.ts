@@ -34,22 +34,21 @@ export async function PATCH(request: Request) {
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null) return noStore({ message: "Revise suas preferências." }, 400);
     const values = body as Record<string, unknown>;
-    if (typeof values.marketingConsent !== "boolean" || typeof values.photoConsent !== "boolean") return noStore({ message: "Informe as duas preferências de forma válida." }, 400);
+    if (typeof values.photoConsent !== "boolean") return noStore({ message: "Informe a preferência de publicação de imagens." }, 400);
     const db = await getDb();
-    const [client] = await db.select({ id: clients.id, marketingConsent: clients.marketingConsent, photoConsent: clients.photoConsent }).from(clients).where(eq(clients.userId, user.id)).limit(1);
+    const [client] = await db.select({ id: clients.id, photoConsent: clients.photoConsent }).from(clients).where(eq(clients.userId, user.id)).limit(1);
     if (!client) return noStore({ message: "Seu acesso ainda não está vinculado ao cadastro do studio." }, 409);
     const [activePolicy] = await db.select({ version: lgpdPolicyVersions.version, content: lgpdPolicyVersions.content }).from(lgpdPolicyVersions).where(eq(lgpdPolicyVersions.active, true)).limit(1);
-    const hasNewGrant = (values.marketingConsent && !client.marketingConsent) || (values.photoConsent && !client.photoConsent);
+    const hasNewGrant = values.photoConsent && !client.photoConsent;
     if (hasNewGrant && !activePolicy) return noStore({ message: "A administração ainda precisa publicar e revisar a política de privacidade antes de registrar novas autorizações." }, 409);
     const [settings] = await db.select({ privacyPolicy: salonSettings.privacyPolicy }).from(salonSettings).where(eq(salonSettings.id, "studio")).limit(1);
     const policyText = activePolicy?.content ?? settings?.privacyPolicy ?? defaultPublicSettings.privacyPolicy;
     const consentVersion = activePolicy?.version ?? await getPrivacyPolicyDigest(policyText);
     const consentChanges = [
-      ...(values.marketingConsent !== client.marketingConsent ? [{ purpose: "marketing", granted: values.marketingConsent }] : []),
       ...(values.photoConsent !== client.photoConsent ? [{ purpose: "photo_publication", granted: values.photoConsent }] : []),
     ];
     await db.batch([
-      db.update(clients).set({ marketingConsent: values.marketingConsent, photoConsent: values.photoConsent, updatedAt: new Date() }).where(eq(clients.id, client.id)),
+      db.update(clients).set({ photoConsent: values.photoConsent, updatedAt: new Date() }).where(eq(clients.id, client.id)),
       ...(consentChanges.length ? [db.insert(lgpdConsents).values(consentChanges.map((consent) => ({ id: crypto.randomUUID(), userId: user.id, clientId: client.id, ...consent, policyVersion: consentVersion, policyText })))] : []),
     ]);
     return noStore({ marketingConsent: values.marketingConsent, photoConsent: values.photoConsent, message: "Preferências atualizadas." });

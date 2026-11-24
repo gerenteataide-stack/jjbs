@@ -46,7 +46,7 @@ async function registerServiceWorker() {
   return registration;
 }
 
-export async function registerPushInstallation() {
+export async function registerPushInstallation(explicitActivation = false) {
   if (!firebaseVapidKey) throw new Error("O Firebase ainda precisa da chave Web Push do projeto.");
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     throw new Error("Este navegador não oferece suporte a notificações push.");
@@ -72,7 +72,7 @@ export async function registerPushInstallation() {
     const response = await fetch("/api/account/push-installations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fid }),
+      body: JSON.stringify({ fid, explicitActivation }),
     });
     const result: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {

@@ -12,7 +12,6 @@ export default function PrivacyCenterPage() {
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [consentHistory, setConsentHistory] = useState<ConsentRecord[]>([]);
   const [policyReviewRequired, setPolicyReviewRequired] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
   const [photoConsent, setPhotoConsent] = useState(false);
   const [type, setType] = useState("access");
   const [details, setDetails] = useState("");
@@ -31,7 +30,6 @@ export default function PrivacyCenterPage() {
       const [result, consentResult] = await Promise.all([requestResponse.json(), consentResponse.json()]);
       if (!requestResponse.ok || !consentResponse.ok) throw new Error(result.message ?? consentResult.message ?? "Entre na sua conta para acessar a central.");
       setRequests(result.requests ?? []);
-      setMarketingConsent(result.consents?.marketingConsent === true);
       setPhotoConsent(result.consents?.photoConsent === true);
       setConsentHistory(consentResult.history ?? []);
       setPolicyReviewRequired(consentResult.policyReviewRequired === true);
@@ -45,7 +43,7 @@ export default function PrivacyCenterPage() {
   async function saveConsents() {
     setSaving(true); setMessage(""); setError(false);
     try {
-      const response = await fetch("/api/lgpd/consents", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marketingConsent, photoConsent }) });
+      const response = await fetch("/api/lgpd/consents", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoConsent }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message ?? "Não foi possível salvar.");
       setMessage(result.message); await load();
@@ -74,8 +72,8 @@ export default function PrivacyCenterPage() {
     {loading ? <p>Carregando…</p> : <>
       <section aria-labelledby="privacy-consents">
         <h2 id="privacy-consents">Suas preferências</h2>
+        <p><a href="/minha-conta#notificacoes">Gerenciar notificações da conta</a></p>
         {policyReviewRequired && <p role="status">A política atual está em revisão pelo studio. Você pode revogar autorizações; novas autorizações ficam disponíveis depois da publicação de uma versão revisada.</p>}
-        <label><input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} /> Aceito receber comunicações e promoções do studio.</label>
         <label><input type="checkbox" checked={photoConsent} onChange={(event) => setPhotoConsent(event.target.checked)} /> Autorizo o uso de imagens minhas em materiais e canais do studio.</label>
         <button className="button button-gold" type="button" disabled={saving} onClick={() => void saveConsents()}>{saving ? "Salvando…" : "Salvar preferências"}</button>
       </section>

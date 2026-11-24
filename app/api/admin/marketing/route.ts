@@ -10,7 +10,7 @@ import {
   services,
 } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
-import { announcePromotion } from "../../../../lib/firebase-push";
+import { announcePromotion, sendPushToUsersDetailed } from "../../../../lib/firebase-push";
 
 const discountTypes = new Set(["percentage", "fixed", "combo"]);
 const audiences = new Set(["all", "birthday", "first_visit", "off_peak"]);
@@ -46,6 +46,19 @@ function parsePromotion(value: unknown) {
   return { id, title, description, discountType, discountValue, couponCode: couponCodeValue?.toUpperCase() ?? null, audience, comboDescription, startDate, endDate, active: value.active !== false, featured: value.featured === true, serviceIds };
 }
 
+async function notifyLoyaltyClient(userId: string | null, body: string) {
+  if (!userId) return;
+  try {
+    await sendPushToUsersDetailed([userId], {
+      title: "Seu cartão fidelidade foi atualizado",
+      body,
+      url: "/minha-conta#notificacoes",
+    });
+  } catch (error) {
+    console.error("[push] loyalty notice failed", { message: error instanceof Error ? error.message : "Unknown push error" });
+  }
+}
+
 export async function GET(request: Request) {
   try {
     if (!(await requireAdmin(request))) return noStore({ message: "Acesso restrito ao painel administrativo." }, 403);
@@ -78,6 +91,8 @@ export async function POST(request: Request) {
     if (body.resource === "loyalty-redemption") {
       const clientId = typeof body.clientId === "string" ? body.clientId : "";
       if (!clientId) return noStore({ message: "Selecione uma cliente." }, 400);
+      const [client] = await db.select({ userId: clients.userId }).from(clients).where(eq(clients.id, clientId)).limit(1);
+      if (!client) return noStore({ message: "Cliente não encontrada." }, 404);
       const redemption = await db.execute(sql`
         WITH available AS (
           SELECT client_id, stamps AS previous_stamps FROM loyalty_accounts
@@ -104,6 +119,7 @@ export async function POST(request: Request) {
         SELECT client_id FROM logged
       `);
       if (!Array.isArray(redemption) || redemption.length === 0) return noStore({ message: "A cliente ainda não tem uma hidratação grátis disponível." }, 409);
+      await notifyLoyaltyClient(client.userId, "Sua hidratação grátis foi resgatada e seu cartão fidelidade foi atualizado.");
       return noStore({ message: "Hidratação grátis registrada. O cartão voltou a zero carimbos." });
     }
     if (body.resource === "loyalty") {
@@ -114,7 +130,7 @@ export async function POST(request: Request) {
       const stampsDelta = typeof body.stampsDelta === "number" && Number.isSafeInteger(body.stampsDelta) ? body.stampsDelta : 0;
       const referralsDelta = typeof body.referralsDelta === "number" && Number.isSafeInteger(body.referralsDelta) ? body.referralsDelta : 0;
       if (!clientId || !loyaltyKinds.has(kind) || description.length < 3 || description.length > 300 || [pointsDelta, stampsDelta, referralsDelta].some((item) => Math.abs(item) > 10000) || (!pointsDelta && !stampsDelta && !referralsDelta)) return noStore({ message: "Revise a cliente e a movimentação de fidelidade." }, 400);
-      const [client] = await db.select({ id: clients.id }).from(clients).where(eq(clients.id, clientId)).limit(1);
+      const [client] = await db.select({ id: clients.id, userId: clients.userId }).from(clients).where(eq(clients.id, clientId)).limit(1);
       if (!client) return noStore({ message: "Cliente não encontrada." }, 404);
       const accountId = crypto.randomUUID();
       const [account] = await db.insert(loyaltyAccounts).values({ id: accountId, clientId, points: Math.max(0, pointsDelta), stamps: Math.max(0, stampsDelta), referrals: Math.max(0, referralsDelta) }).onConflictDoUpdate({
@@ -131,6 +147,7 @@ export async function POST(request: Request) {
         db.insert(loyaltyTransactions).values({ id: transactionId, clientId, kind, pointsDelta, stampsDelta, referralsDelta, description, createdBy: admin.id }),
         db.insert(auditLogs).values({ id: crypto.randomUUID(), userId: admin.id, action: "loyalty.adjusted", entity: "client", entityId: clientId, metadata: { kind, pointsDelta, stampsDelta, referralsDelta } }),
       ]);
+      await notifyLoyaltyClient(client.userId, "Abra sua conta para consultar a atualização.");
       return noStore({ account, message: "Fidelidade atualizada com histórico." }, 201);
     }
 

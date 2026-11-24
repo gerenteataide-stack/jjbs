@@ -25,7 +25,6 @@ type ClientInput = {
   allergies: string | null;
   notes: string | null;
   photoConsent: boolean;
-  marketingConsent: boolean;
   active: boolean;
 };
 
@@ -88,7 +87,6 @@ function parseClient(value: unknown): ClientInput | null {
     allergies: allergies ?? null,
     notes: notes ?? null,
     photoConsent: value.photoConsent === true,
-    marketingConsent: value.marketingConsent === true,
     active: value.active !== false,
   };
 }
@@ -105,7 +103,6 @@ function clientValues(input: ClientInput) {
     allergies: input.allergies,
     notes: input.notes,
     photoConsent: input.photoConsent,
-    marketingConsent: input.marketingConsent,
     active: input.active,
   };
 }

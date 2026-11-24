@@ -19,7 +19,6 @@ type Client = {
   allergies: string | null;
   notes: string | null;
   photoConsent: boolean;
-  marketingConsent: boolean;
   active: boolean;
   linkedAccount: boolean;
   attendanceCount: number;
@@ -50,7 +49,6 @@ type ClientForm = {
   allergies: string;
   notes: string;
   photoConsent: boolean;
-  marketingConsent: boolean;
   active: boolean;
 };
 
@@ -64,7 +62,6 @@ const emptyClient: ClientForm = {
   allergies: "",
   notes: "",
   photoConsent: false,
-  marketingConsent: false,
   active: true,
 };
 const statusLabels: Record<string, string> = {
@@ -160,7 +157,6 @@ export default function ClientManagement() {
       allergies: client.allergies ?? "",
       notes: client.notes ?? "",
       photoConsent: client.photoConsent,
-      marketingConsent: client.marketingConsent,
       active: client.active,
     });
     setSelected(client);
@@ -395,19 +391,6 @@ export default function ClientManagement() {
               }
             />{" "}
             Autorizou fotos dos resultados
-          </label>
-          <label className="admin-toggle">
-            <input
-              type="checkbox"
-              checked={form.marketingConsent}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  marketingConsent: event.target.checked,
-                }))
-              }
-            />{" "}
-            Autorizou comunicações e promoções
           </label>
           <label className="admin-toggle">
             <input

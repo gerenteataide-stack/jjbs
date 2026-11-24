@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { appointmentServices, appointments, auditLogs, clients, notifications, reminderRules, services, users } from "../../../../db/schema";
 import { requireAdmin } from "../../../../lib/admin";
 import { todayInFortaleza } from "../../../../lib/scheduling";
+import { sendAppointmentPush } from "../../../../lib/firebase-push";
 
 const channels = new Set(["in_app", "whatsapp_link", "email"]);
 const types = new Set(["confirmation", "reminder", "reschedule", "cancellation", "promotion", "birthday", "review_request", "maintenance", "custom"]);
@@ -62,11 +63,19 @@ export async function POST(request: Request) {
     }
     const userId = typeof body.userId === "string" ? body.userId : ""; const title = typeof body.title === "string" ? body.title.trim() : ""; const message = typeof body.message === "string" ? body.message.trim() : ""; const type = typeof body.type === "string" ? body.type : ""; const channel = typeof body.channel === "string" ? body.channel : "";
     if (!userId || title.length < 3 || title.length > 120 || message.length < 5 || message.length > 1000 || !types.has(type) || !channels.has(channel)) return noStore({ message: "Revise cliente, título, mensagem, tipo e canal." }, 400);
-    const [client] = await db.select({ id: clients.id }).from(clients).where(and(eq(clients.userId, userId), eq(clients.active, true))).limit(1);
-    if (!client) return noStore({ message: "A cliente precisa possuir conta ativa." }, 400);
+    const [client] = await db.select({ id: clients.id, userId: clients.userId }).from(clients).where(and(eq(clients.userId, userId), eq(clients.active, true))).limit(1);
+    if (!client?.userId) return noStore({ message: "A cliente precisa possuir conta ativa." }, 400);
     const id = crypto.randomUUID();
-    const [notification] = await db.insert(notifications).values({ id, userId, title, message, type, channel, status: channel === "in_app" ? "sent" : "pending", sentAt: channel === "in_app" ? new Date() : null, createdBy: admin.id }).returning();
+    const sentAt = channel === "in_app" ? new Date() : null;
+    const [notification] = await db.insert(notifications).values({ id, userId, title, message, type, channel, status: sentAt ? "sent" : "pending", sentAt, createdBy: admin.id }).returning();
     await db.insert(auditLogs).values({ id: crypto.randomUUID(), userId: admin.id, action: "notification.created", entity: "notification", entityId: id, metadata: { type, channel, clientId: client.id } });
+    if (sentAt) {
+      await sendAppointmentPush([client.userId], {
+        title: "Novo aviso do studio",
+        body: "Abra sua conta para ler a mensagem.",
+        url: "/minha-conta#notificacoes",
+      });
+    }
     return noStore({ notification, message: "Comunicação registrada." }, 201);
   } catch { return noStore({ message: "Não foi possível salvar a comunicação." }, 500); }
 }

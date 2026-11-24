@@ -42,11 +42,15 @@ export async function sendPushToUsersDetailed(userIds: string[], notice: PushNot
     return { attempted: 0, succeeded: 0, failedCodes: [], reason: "missing-credentials" };
   }
   const db = await getDb();
-  const installations = await db
-    .select({ fid: pushInstallations.fid })
-    .from(pushInstallations)
-    .where(inArray(pushInstallations.userId, [...new Set(userIds)].slice(0, 1000)))
-    .limit(500);
+  const uniqueUserIds = [...new Set(userIds)];
+  const installations: Array<{ fid: string }> = [];
+  for (let offset = 0; offset < uniqueUserIds.length; offset += 1000) {
+    installations.push(...await db
+      .select({ fid: pushInstallations.fid })
+      .from(pushInstallations)
+      .innerJoin(users, eq(users.id, pushInstallations.userId))
+      .where(and(eq(users.status, "active"), inArray(pushInstallations.userId, uniqueUserIds.slice(offset, offset + 1000)))));
+  }
   if (!installations.length) {
     return { attempted: 0, succeeded: 0, failedCodes: [], reason: "no-installations" };
   }
@@ -63,20 +67,30 @@ export async function sendPushToUsersDetailed(userIds: string[], notice: PushNot
     },
     webpush: { headers: { Urgency: "high" } },
   }));
-  const result = await messaging.sendEach(messages);
-
-  const invalidFids = result.responses.flatMap((response, index) =>
-    !response.success && response.error?.code === "messaging/registration-token-not-registered"
-      ? [installations[index].fid]
-      : [],
-  );
+  let attempted = 0;
+  let succeeded = 0;
+  const failedCodes: string[] = [];
+  const invalidFids: string[] = [];
+  for (let offset = 0; offset < messages.length; offset += 500) {
+    const batch = messages.slice(offset, offset + 500);
+    const result = await messaging.sendEach(batch);
+    attempted += result.responses.length;
+    succeeded += result.successCount;
+    result.responses.forEach((response, index) => {
+      if (response.success) return;
+      failedCodes.push(response.error?.code ?? "unknown");
+      if (response.error?.code === "messaging/registration-token-not-registered") {
+        invalidFids.push(installations[offset + index].fid);
+      }
+    });
+  }
   if (invalidFids.length) {
     await db.delete(pushInstallations).where(inArray(pushInstallations.fid, invalidFids));
   }
   return {
-    attempted: result.responses.length,
-    succeeded: result.successCount,
-    failedCodes: result.responses.flatMap((response) => response.success ? [] : [response.error?.code ?? "unknown"]),
+    attempted,
+    succeeded,
+    failedCodes,
   };
 }
 
@@ -112,16 +126,16 @@ export async function announcePromotion(
 ) {
   const db = await getDb();
   const eligibleClients = await db
-    .select({ userId: clients.userId })
+    .selectDistinct({ userId: clients.userId })
     .from(clients)
     .innerJoin(users, eq(users.id, clients.userId))
+    .innerJoin(pushInstallations, eq(pushInstallations.userId, clients.userId))
     .where(and(
       eq(clients.active, true),
       eq(clients.marketingConsent, true),
       eq(users.status, "active"),
       eq(users.role, "client"),
-    ))
-    .limit(2000);
+    ));
   const userIds = [...new Set(eligibleClients.flatMap((client) => client.userId ? [client.userId] : []))];
   if (!userIds.length) return { recipients: 0, pushed: 0 };
 

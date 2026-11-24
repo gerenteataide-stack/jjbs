@@ -84,7 +84,9 @@ O service worker armazena somente assets com hash e a página neutra de conexão
 
 ## Notificações push
 
-O app mantém os avisos e as preferências no Neon. O Firebase Cloud Messaging entrega push de novos agendamentos às contas internas e de cupons/promoções às clientes com consentimento de marketing. A cliente ativa o consentimento e as notificações na área **Minha conta**; o studio ativa os avisos no painel.
+O app mantém as autorizações e os dispositivos inscritos no Neon. A cliente usa um único botão em **Minha conta** para aceitar e ativar notificações push: confirmações, atualizações pessoais, cartão fidelidade, avaliações, cupons e promoções. O registro da autorização usa a versão ativa da política de privacidade; a ativação permanece bloqueada enquanto a administração não publicar uma versão revisada. Desativar notificações revoga a autorização promocional e remove as inscrições push da conta.
+
+Avisos nominais — como confirmação de agendamento, atualização do cartão fidelidade, resposta e pedido de avaliação — são enviados somente à conta da cliente selecionada ou relacionada ao evento. Cupons e promoções são enviados às contas ativas que ativaram notificações e têm dispositivo push inscrito. No painel de comunicação, o canal Dentro do sistema registra a mensagem e tenta enviar push à cliente escolhida.
 
 Configure `NEXT_PUBLIC_FIREBASE_VAPID_KEY` com a chave pública Web Push de Firebase Console → Configurações do projeto → Cloud Messaging → Certificados Web Push. Configure `FIREBASE_SERVICE_ACCOUNT_JSON` com o JSON privado da conta de serviço como segredo no ambiente local/deploy; habilite FCM Registration API e Firebase Cloud Messaging API (HTTP v1) no projeto Google Cloud/Firebase. Nunca comite ou compartilhe o JSON privado. O worker FCM tem escopo `/fcm/` separado do service worker PWA existente.
 
