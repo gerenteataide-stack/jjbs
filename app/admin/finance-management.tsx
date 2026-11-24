@@ -323,7 +323,12 @@ export default function FinanceManagement() {
                 <div><span>Histórico</span><h3>Lançamentos</h3></div>
                 <div className="finance-filters">
                   <input aria-label="Buscar lançamento" placeholder="Buscar cliente ou serviço" value={query} onChange={(event) => setQuery(event.target.value)} />
-                  <select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                    <option value="all">Todos os status</option>
+                    {Object.entries(statusLabels)
+                      .filter(([value]) => value !== "cancelled")
+                      .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
                 </div>
               </div>
               {filteredTransactions.length ? (

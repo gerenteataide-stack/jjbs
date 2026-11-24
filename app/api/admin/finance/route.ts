@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ne, notInArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import {
   appointmentServices,
@@ -214,7 +214,10 @@ export async function GET(request: Request) {
         })
         .from(payments)
         .leftJoin(paymentMethods, eq(paymentMethods.id, payments.paymentMethodId))
-        .where(inArray(payments.appointmentId, appointmentIds))
+        .where(and(
+          inArray(payments.appointmentId, appointmentIds),
+          ne(payments.status, "cancelled"),
+        ))
         .orderBy(desc(payments.createdAt))
         .limit(3000)
         : Promise.resolve([]),
@@ -246,9 +249,7 @@ export async function GET(request: Request) {
     const appointmentMap = new Map(allAppointmentRows.map((row) => [row.id, row]));
     const enrichAppointment = (appointment: (typeof allAppointmentRows)[number]) => {
       const rows = paymentsByAppointment.get(appointment.id) ?? [];
-      const effective = rows.filter(
-        (row) => row.status !== "cancelled" && row.status !== "refunded",
-      );
+      const effective = rows.filter((row) => row.status !== "refunded");
       const discountCents = effective.reduce(
         (sum, row) => sum + row.discountCents,
         0,
@@ -293,7 +294,7 @@ export async function GET(request: Request) {
         return predicate(key) ? sum + row.amountCents : sum;
       }, 0);
     const discountsCents = paymentRows
-      .filter((row) => row.status !== "cancelled" && row.status !== "refunded")
+      .filter((row) => row.status !== "refunded")
       .reduce((sum, row) => sum + row.discountCents, 0);
     const pendingCents = enrichedAppointments.reduce(
       (sum, row) => sum + row.remainingCents,
