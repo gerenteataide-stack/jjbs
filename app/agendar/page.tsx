@@ -9,7 +9,7 @@ import { whatsappHref } from "../../lib/public-links";
 import { PublicBrand, usePublicSettings } from "../public-settings";
 import CalendarMonths from "../calendar-months";
 import { formatDurationInHours, todayInFortaleza } from "../../lib/scheduling";
-import { hairSizes, isHairSize, priceForHairSize, type HairSize, type HairSizePrices } from "../../lib/hair-sizes";
+import { formatHairServicePrice as priceLabel, hairSizes, isHairSize, type HairSize, type HairSizePrices } from "../../lib/hair-sizes";
 import { isInternalRole } from "../../lib/permissions";
 
 type Service = {
@@ -112,11 +112,6 @@ function dateLabel(value: string) {
 function durationLabel(minutes: number) {
   return formatDurationInHours(minutes);
 }
-function priceLabel(service: Service, size: HairSize) {
-  const priceCents = priceForHairSize(service.sizePrices, size, service.priceCents);
-  if (priceCents === null) return "Sob consulta";
-  return `${service.priceType === "starting_at" ? "A partir de " : ""}${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(priceCents / 100)}`;
-}
 export default function BookingPage() {
   const settings = usePublicSettings();
   const [openDates, setOpenDates] = useState<string[]>([]);
@@ -141,6 +136,7 @@ export default function BookingPage() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const autoAdvanceToClientData = useRef(false);
+  const initialSelection = useRef<{ date: string; time: string; service: string; size: HairSize } | null>(null);
   const [client, setClient] = useState<ClientData>({
     name: "",
     phone: "",
@@ -178,6 +174,7 @@ export default function BookingPage() {
   );
 
   function chooseDate(value: string) {
+    initialSelection.current = null;
     if (value !== date) {
       setTime("");
       setHairSize("");
@@ -203,6 +200,11 @@ export default function BookingPage() {
     const requestedProfessionalId = search.get("professional")?.trim() ?? "";
     const requestedHairSize = search.get("hairSize");
     const requestedDate = search.get("date")?.trim() ?? "";
+    const requestedTime = search.get("time") ?? "";
+    if (!search.has("reschedule") && requestedDate && requestedServiceId &&
+      isHairSize(requestedHairSize) && /^\d{2}:\d{2}$/.test(requestedTime)) {
+      initialSelection.current = { date: requestedDate, time: requestedTime, service: requestedServiceId, size: requestedHairSize };
+    }
     setRescheduleId(search.get("reschedule")?.trim() ?? "");
     if (requestedProfessionalId) setProfessionalId(requestedProfessionalId);
     if (isHairSize(requestedHairSize)) setHairSize(requestedHairSize);
@@ -369,13 +371,25 @@ export default function BookingPage() {
           setServiceIdsBySlot(nextServiceIdsBySlot);
           setProfessionals([]);
           setSlots(nextSlots);
+          const selection = initialSelection.current;
+          initialSelection.current = null;
+          if (choosingDateAndTime && selection?.date === date) {
+            if (nextSlots.includes(selection.time) && nextServiceIdsBySlot[selection.time]?.includes(selection.service)) {
+              setTime(selection.time);
+              setHairSize(selection.size);
+              setServiceId(selection.service);
+              setStep(5);
+              return;
+            }
+            setAvailabilityNote("O horário escolhido mudou. Consulte os horários disponíveis abaixo.");
+          }
           if (serviceId && !nextServiceIds.includes(serviceId)) {
             setServiceId("");
             setProfessionalId("");
             setCouponCode("");
             setAppliedCoupon(null);
           }
-          if (!nextSlots.length) setAvailabilityNote("Não há horários de início livres nesta data.");
+          if (!nextSlots.length && selection?.date !== date) setAvailabilityNote("Não há horários de início livres nesta data.");
           return;
         }
 
@@ -650,6 +664,8 @@ export default function BookingPage() {
                   {availabilityLoading ? (
                     <p className="booking-helper">Carregando horários para esta data…</p>
                   ) : slots.length ? (
+                    <>
+                    {availabilityNote && <p className="booking-helper" role="status">{availabilityNote}</p>}
                     <div className="booking-time-grid">
                       {slots.map((slot) => (
                         <button
@@ -667,6 +683,7 @@ export default function BookingPage() {
                         </button>
                       ))}
                     </div>
+                    </>
                   ) : (
                     <p className="booking-helper" role="status">
                       {availabilityNote || "Não há horários de início livres nesta data."}

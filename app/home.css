@@ -98,3 +98,45 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .home-review-carousel small{margin-top:16px;color:#c7c5bd;line-height:1.5}
 @media(max-width:760px){.home-reviews{padding-top:70px;padding-bottom:70px}.home-reviews .home-section-top{display:grid;gap:18px;margin-bottom:30px}.home-review-carousel article{min-height:180px;padding:22px}}
 .home-work-grid .home-work-video { aspect-ratio: 16 / 9; background: #090909; margin-top: 12px; object-fit: contain; width: 100%; }
+.studio-home .studio-assistant-launch {
+  position: fixed;
+  inset-inline-end: 1rem;
+  inset-block-end: max(1rem, env(safe-area-inset-bottom));
+  z-index: 20;
+  cursor: pointer;
+}
+
+.studio-home .studio-assistant-dialog {
+  position: fixed;
+  inset: auto 1rem max(1rem, env(safe-area-inset-bottom)) auto;
+  width: min(24rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: 0;
+  padding: 1.25rem;
+  overflow: auto;
+  border: 1px solid var(--home-accent);
+  border-radius: 1rem;
+  background: #fffaf5;
+  color: var(--home-ink);
+}
+
+.studio-assistant-dialog::backdrop { background: rgb(24 14 12 / 48%); }
+.studio-assistant-dialog header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.studio-assistant-dialog h2 { margin: 0; font-size: 1.3rem; }
+.studio-assistant-dialog button { cursor: pointer; }
+.studio-assistant-dialog header button { min-width: 44px; min-height: 44px; font-size: 1.5rem; }
+.studio-assistant-fields, .studio-assistant-fields label { display: grid; gap: .55rem; }
+.studio-assistant-fields { gap: .85rem; }
+.studio-assistant-fields p { margin: 0; }
+.studio-assistant-fields select {
+  width: 100%;
+  min-height: 44px;
+  padding: .5rem;
+  border: 1px solid #8b7165;
+  border-radius: .5rem;
+  background: white;
+  color: #30221e;
+  font: inherit;
+}
+.studio-assistant-dialog footer { margin-top: 1rem; }
+.studio-assistant-dialog footer a { text-decoration: underline; }

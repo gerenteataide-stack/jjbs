@@ -10,6 +10,7 @@ import { instagramHref, whatsappHref } from "../lib/public-links";
 import HomeInteractions from "./home-interactions";
 import HomeSchedule from "./home-schedule";
 import ReviewsHighlight from "./reviews-highlight";
+import StudioAssistant from "./studio-assistant";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,7 @@ export default async function Home() {
   return (
     <main className="studio-home" style={{ "--home-ink": settings.primaryColor, "--home-accent": settings.accentColor } as CSSProperties}>
       <HomeInteractions />
+      <StudioAssistant contactHref={whatsapp} />
       <a className="home-skip" href="#conteudo">Ir para o conteúdo</a>
       <header className="home-header">
         <Link className="home-brand" href="/" aria-label={`${settings.salonName} — início`}>
