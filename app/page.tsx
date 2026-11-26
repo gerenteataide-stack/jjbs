@@ -11,6 +11,7 @@ import HomeInteractions from "./home-interactions";
 import HomeSchedule from "./home-schedule";
 import ReviewsHighlight from "./reviews-highlight";
 import StudioAssistant from "./studio-assistant";
+import HairLengthGuide from "./hair-length-guide";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,6 @@ export default async function Home() {
   return (
     <main className="studio-home" style={{ "--home-ink": settings.primaryColor, "--home-accent": settings.accentColor } as CSSProperties}>
       <HomeInteractions />
-      <StudioAssistant contactHref={whatsapp} />
       <a className="home-skip" href="#conteudo">Ir para o conteúdo</a>
       <header className="home-header">
         <Link className="home-brand" href="/" aria-label={`${settings.salonName} — início`}>
@@ -118,7 +118,10 @@ export default async function Home() {
         <div className="home-hero-copy">
           <h1 id="home-title">{settings.homepageHeadline || "Beleza com assinatura."}</h1>
           <p>{settings.homepageDescription || `${settings.salonName}: cabelo, cuidado e um olhar só para você. Um atendimento que começa com escuta e termina com o seu estilo.`}</p>
-          <a className="home-button" href="/agendar">Agendar meu horário <span aria-hidden="true">↘</span></a>
+          <div className="home-hero-actions">
+            <a className="home-button" href="/agendar#calendario">Agendar meu horário <span aria-hidden="true">↘</span></a>
+            <StudioAssistant contactHref={whatsapp} />
+          </div>
           <a className="home-secondary" href="/servicos">Encontre seu cuidado <span aria-hidden="true">↓</span></a>
           <p className="home-hero-note">Do primeiro cuidado ao toque final, o seu estilo guia cada escolha.</p>
         </div>
@@ -129,19 +132,7 @@ export default async function Home() {
           <h2 id="hair-length-title">Veja o tamanho do seu cabelo</h2>
           <p>Uma referência de comprimento para a Progressiva Orgânica.</p>
         </div>
-        <figure className="home-hair-length-visual">
-          <img src="/hair-length-guide.png" alt="Cabelo longo e liso, com indicações de comprimento P, M, G e EX." loading="lazy" />
-          <figcaption aria-label="Comprimentos: P, M, G e EX">
-            <span className="home-hair-guide home-hair-guide-p" aria-hidden="true" />
-            <span className="home-hair-size home-hair-size-p" aria-hidden="true">P</span>
-            <span className="home-hair-guide home-hair-guide-m" aria-hidden="true" />
-            <span className="home-hair-size home-hair-size-m" aria-hidden="true">M</span>
-            <span className="home-hair-guide home-hair-guide-g" aria-hidden="true" />
-            <span className="home-hair-size home-hair-size-g" aria-hidden="true">G</span>
-            <span className="home-hair-guide home-hair-guide-ex" aria-hidden="true" />
-            <span className="home-hair-size home-hair-size-ex" aria-hidden="true">EX</span>
-          </figcaption>
-        </figure>
+        <HairLengthGuide className="home-hair-length-visual" />
       </section>
       <Suspense fallback={<HomeScheduleLoading />}><HomeSchedule /></Suspense>
       <Suspense fallback={<HomeServicesLoading />}><HomeServices /></Suspense>

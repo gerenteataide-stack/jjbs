@@ -629,8 +629,10 @@ export default function BookingPage() {
         </div>
         <div className="booking-layout">
           <section
+            id="calendario"
             className="booking-panel"
             aria-labelledby="booking-panel-title"
+            tabIndex={-1}
           >
             <div className="booking-panel-top">
               <span>Etapa 0{step}</span>

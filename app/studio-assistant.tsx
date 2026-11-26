@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { formatHairServicePrice, hairSizes, isHairSize, type HairSize, type HairSizePrices } from "../lib/hair-sizes";
+import { formatHairServicePrice, isHairSize, type HairSize, type HairSizePrices } from "../lib/hair-sizes";
+import { todayInFortaleza } from "../lib/scheduling";
+import CalendarMonths from "./calendar-months";
+import HairLengthGuide from "./hair-length-guide";
 
 type Service = { id: string; name: string; priceCents: number | null; priceType: string; sizePrices: HairSizePrices | null };
 type Catalog = { services: Service[]; dates: string[] };
@@ -13,8 +16,6 @@ async function getJson<T>(url: string, signal: AbortSignal): Promise<T> {
   return response.json();
 }
 
-const dateFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Fortaleza" });
-
 function AssistantOptions() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catalogError, setCatalogError] = useState(false);
@@ -22,6 +23,7 @@ function AssistantOptions() {
   const [serviceId, setServiceId] = useState("");
   const [size, setSize] = useState<HairSize | "">("");
   const [date, setDate] = useState("");
+  const [today] = useState(todayInFortaleza);
   const [lookup, setLookup] = useState<{ date: string; slots: Record<string, string[]> | null } | null>(null);
   const [time, setTime] = useState("");
 
@@ -71,7 +73,7 @@ function AssistantOptions() {
         {catalog.services.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select>
     </label>
-    {service && <label>Tamanho do cabelo
+    <label>Tamanho do cabelo
       <select value={size} onChange={(event) => {
         const value = event.target.value;
         setSize(isHairSize(value) ? value : "");
@@ -83,15 +85,18 @@ function AssistantOptions() {
         <option value="G">G — Grande</option>
         <option value="EX">EX — Extra grande</option>
       </select>
-    </label>}
+    </label>
     {service && size && <>
       <p role="status"><strong>{formatHairServicePrice(service, size)}</strong></p>
-      {catalog.dates.length ? <label>Data
-        <select value={date} onChange={(event) => { setLookup(null); setDate(event.target.value); setTime(""); }}>
-          <option value="">Escolha uma data</option>
-          {catalog.dates.map((day) => <option key={day} value={day}>{dateFormat.format(new Date(`${day}T12:00:00Z`))}</option>)}
-        </select>
-      </label> : <p>Sem datas disponíveis. <Link href="/lista-de-espera">Entrar na lista de espera</Link></p>}
+      {catalog.dates.length ? <fieldset className="studio-assistant-dates">
+        <legend>Escolha uma data</legend>
+        <CalendarMonths days={catalog.dates} today={today} selectedDate={date} onSelectDate={(day) => {
+          if (day === date) return;
+          setLookup(null);
+          setDate(day);
+          setTime("");
+        }} />
+      </fieldset> : <p>Sem datas disponíveis. <Link href="/lista-de-espera">Entrar na lista de espera</Link></p>}
       {date && !result && <p role="status">Consultando horários…</p>}
       {result?.slots === null && <><p role="status">Não foi possível consultar os horários.</p><button type="button" onClick={() => { setLookup(null); setAttempt(attempt + 1); }}>Tentar novamente</button></>}
       {result?.slots && (slots.length ? <label>Horário
@@ -116,7 +121,10 @@ export default function StudioAssistant({ contactHref }: { contactHref: string }
         <h2 id="studio-assistant-title">Atendimento do Studio</h2>
         <button type="button" aria-label="Fechar atendimento" onClick={() => dialog.current?.close()}>×</button>
       </header>
-      {open && <AssistantOptions />}
+      {open && <>
+        <HairLengthGuide className="studio-assistant-hair-guide" />
+        <AssistantOptions />
+      </>}
       <footer>
         <a href={contactHref}>{contactHref === "/contato" ? "Falar com a equipe" : "Falar com a equipe pelo WhatsApp"}</a>
       </footer>

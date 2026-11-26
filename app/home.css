@@ -98,13 +98,52 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .home-review-carousel small{margin-top:16px;color:#c7c5bd;line-height:1.5}
 @media(max-width:760px){.home-reviews{padding-top:70px;padding-bottom:70px}.home-reviews .home-section-top{display:grid;gap:18px;margin-bottom:30px}.home-review-carousel article{min-height:180px;padding:22px}}
 .home-work-grid .home-work-video { aspect-ratio: 16 / 9; background: #090909; margin-top: 12px; object-fit: contain; width: 100%; }
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  max-width: 100%;
+}
+
+.home-hero-actions .home-button {
+  height: 100%;
+  gap: .5rem;
+}
+
 .studio-home .studio-assistant-launch {
-  position: fixed;
-  inset-inline-end: 1rem;
-  inset-block-end: max(1rem, env(safe-area-inset-bottom));
-  z-index: 20;
+  border: 1px solid var(--home-accent);
+  background: transparent;
+  color: var(--home-paper) !important;
+  font: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
+
+.studio-home .studio-assistant-launch:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.studio-home .studio-assistant-launch:focus-visible {
+  outline: 3px solid var(--home-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .home-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(100%, 24rem);
+  }
+
+  .studio-home .home-hero-actions .home-button {
+    justify-content: center;
+    width: 100%;
+    padding: .75rem .5rem;
+    text-align: center;
+  }
+}
+
+.booking-panel#calendario { scroll-margin-top: 1rem; }
 
 .studio-home .studio-assistant-dialog {
   position: fixed;
@@ -128,6 +167,32 @@ html:has(.studio-home){scroll-behavior:smooth;scroll-padding-top:28px}
 .studio-assistant-fields, .studio-assistant-fields label { display: grid; gap: .55rem; }
 .studio-assistant-fields { gap: .85rem; }
 .studio-assistant-fields p { margin: 0; }
+.studio-assistant-dialog .studio-assistant-hair-guide {
+  position: relative;
+  width: min(46%, 9rem);
+  aspect-ratio: 941 / 1672;
+  margin: .5rem auto 1rem;
+}
+.studio-assistant-hair-guide img { width: 100%; height: auto; border-radius: .5rem; }
+.studio-assistant-hair-guide figcaption { position: absolute; inset: 0; }
+.studio-assistant-hair-guide .home-hair-size { font-size: .7rem; }
+.studio-assistant-dates { min-width: 0; margin: 0; padding: 0; border: 0; }
+.studio-assistant-dates .home-calendars { margin-top: .5rem; }
+.studio-assistant-dates .home-calendar {
+  padding: .5rem;
+  border-radius: .65rem;
+  color: var(--home-paper);
+}
+.studio-assistant-dates .home-calendar h3 { font-size: 1rem; }
+.studio-assistant-dates .home-calendar table { border-spacing: 2px; }
+.studio-assistant-dates .home-calendar th { font-size: .68rem; }
+.studio-assistant-dates .home-calendar td { height: 2.25rem; }
+.studio-assistant-dates .home-calendar td :is(button, span) {
+  min-height: 2.25rem;
+  font-size: .82rem;
+}
+.studio-assistant-dates .home-calendar td button.selected { outline-offset: -3px; outline-color: #10100e; }
+.studio-assistant-dates .home-calendar-legend { margin-top: .5rem !important; }
 .studio-assistant-fields select {
   width: 100%;
   min-height: 44px;
